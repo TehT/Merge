@@ -221,9 +221,9 @@ func show_team(team: TeamData) -> void:
 	_add_info_row("Cohesion", "%.0f%%" % team.cohesion)
 
 	if team.is_traveling:
-		var eta := maxi(0, team.travel_arrival_day - %GameClock.current_day)
+		var hours_left := maxf(0.0, (team.travel_arrival_day - %GameClock.get_current_time_days()) * 24.0)
 		_add_info_row("Location", "En route to %s" % team.travel_destination_name)
-		_add_info_row("ETA", "%d day(s)" % eta)
+		_add_info_row("ETA", VehicleData.format_duration(hours_left))
 	else:
 		_add_info_row("Location", team.location_name)
 
@@ -282,8 +282,9 @@ func show_hq() -> void:
 	else:
 		for team: TeamData in teams:
 			if team.is_traveling:
-				var eta := maxi(0, team.travel_arrival_day - %GameClock.current_day)
-				_add_info_row(team.team_name, "En route to %s (%dd)" % [team.travel_destination_name, eta])
+				var hours_left := maxf(0.0, (team.travel_arrival_day - %GameClock.get_current_time_days()) * 24.0)
+				_add_info_row(team.team_name, "En route to %s (%s)" % [
+					team.travel_destination_name, VehicleData.format_duration(hours_left)])
 			else:
 				_add_info_row(team.team_name, "At base")
 
@@ -474,9 +475,12 @@ func show_travel_confirmation(team_name: String, ev_title: String, plan: Diction
 	status_lbl.add_theme_color_override("font_color", Color(0.5, 0.6, 0.8, 1.0))
 	add_child(status_lbl)
 
+	var arrival_time: float = plan.arrival_time
+	var arrival_hour := int(fmod(arrival_time, 1.0) * 24.0)
+
 	_add_info_row("Distance", "%d km" % int(round(float(plan.distance_km))))
-	_add_info_row("Travel Time", "%d day(s)" % int(plan.travel_days))
-	_add_info_row("Arriving", "Day %d" % int(plan.arrival_day))
+	_add_info_row("Travel Time", VehicleData.format_duration(plan.travel_hours))
+	_add_info_row("Arriving", "Day %d, ~%02d:00" % [int(arrival_time), arrival_hour])
 
 	add_child(HSeparator.new())
 	var close_btn := Button.new()

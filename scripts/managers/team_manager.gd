@@ -64,8 +64,15 @@ func _on_day_advanced(_day: int) -> void:
 		if _training[team_id] <= 0:
 			_finish_training(team_id)
 
+## Travel arrival needs sub-day precision (a short hop shouldn't wait for
+## the next day-tick to land), so it's checked every frame here rather
+## than on day_advanced.
+func _process(_delta: float) -> void:
+	if teams.is_empty():
+		return
+	var now: float = %GameClock.get_current_time_days()
 	for team in teams:
-		if team.is_traveling and %GameClock.current_day >= team.travel_arrival_day:
+		if team.is_traveling and now >= team.travel_arrival_day:
 			_complete_travel(team)
 
 ## Picks the best fleet vehicle for a trip of this distance/team size:
@@ -73,18 +80,18 @@ func _on_day_advanced(_day: int) -> void:
 ## lowest operation cost. Returns null if nothing in the fleet qualifies.
 func get_best_vehicle(distance_km: float, team_size: int) -> VehicleData:
 	var best: VehicleData = null
-	var best_days := INF
+	var best_hours := INF
 	for v: VehicleData in vehicles:
 		if not v.can_reach(distance_km) or not v.can_carry(team_size):
 			continue
-		var days := v.compute_travel_days(distance_km)
-		if best == null or days < best_days or (days == best_days and v.operation_cost < best.operation_cost):
+		var hours := v.compute_travel_hours(distance_km)
+		if best == null or hours < best_hours or (hours == best_hours and v.operation_cost < best.operation_cost):
 			best = v
-			best_days = days
+			best_hours = hours
 	return best
 
 ## Starts a team traveling toward an event's location. Returns a plan
-## dict ({distance_km, travel_days, arrival_day, vehicle_name}) for the
+## dict ({distance_km, travel_hours, arrival_time, vehicle_name}) for the
 ## caller to show the player, or {} if the team doesn't exist or no fleet
 ## vehicle can reach the destination / carry the whole team. Marks members
 ## DEPLOYED — actual mission resolution happens later, on arrival
@@ -102,7 +109,8 @@ func begin_travel(team_id: String, destination: Vector2, destination_name: Strin
 		])
 		return {}
 
-	var days := vehicle.compute_travel_days(distance)
+	var hours := vehicle.compute_travel_hours(distance)
+	var now: float = %GameClock.get_current_time_days()
 
 	# Remember where they set out from so begin_return_travel() knows where
 	# "home" is once the mission concludes, without hardcoding HQ (matters
@@ -114,8 +122,8 @@ func begin_travel(team_id: String, destination: Vector2, destination_name: Strin
 	team.is_traveling = true
 	team.travel_destination = destination
 	team.travel_destination_name = destination_name
-	team.travel_departure_day = %GameClock.current_day
-	team.travel_arrival_day = %GameClock.current_day + days
+	team.travel_departure_day = now
+	team.travel_arrival_day = now + hours / 24.0
 	team.travel_event_id = event_id
 	team.travel_vehicle_name = vehicle.vehicle_name
 
@@ -125,12 +133,13 @@ func begin_travel(team_id: String, destination: Vector2, destination_name: Strin
 			%AgentManager.set_status(agent_id, AgentData.Status.DEPLOYED)
 
 	team_departed.emit(team_id)
-	print("[TeamManager] %s departed for %s via %s (%.0f km, %d day(s))" % [
-		team.team_name, destination_name, vehicle.vehicle_name, distance, days,
+	print("[TeamManager] %s departed for %s via %s (%.0f km, %s)" % [
+		team.team_name, destination_name, vehicle.vehicle_name, distance,
+		VehicleData.format_duration(hours),
 	])
 	return {
-		"distance_km": distance, "travel_days": days,
-		"arrival_day": team.travel_arrival_day, "vehicle_name": vehicle.vehicle_name,
+		"distance_km": distance, "travel_hours": hours,
+		"arrival_time": team.travel_arrival_day, "vehicle_name": vehicle.vehicle_name,
 	}
 
 ## Sends a team back to wherever they departed from after a mission
@@ -146,20 +155,22 @@ func begin_return_travel(team_id: String) -> void:
 	var distance := GeoData.haversine_km(team.location.y, team.location.x,
 			team.travel_return_to.y, team.travel_return_to.x)
 	var vehicle := get_best_vehicle(distance, team.member_ids.size())
-	var days := vehicle.compute_travel_days(distance) if vehicle else 1
+	var hours := vehicle.compute_travel_hours(distance) if vehicle else 24.0
+	var now: float = %GameClock.get_current_time_days()
 
 	team.is_traveling = true
 	team.travel_destination = team.travel_return_to
 	team.travel_destination_name = team.travel_return_to_name
-	team.travel_departure_day = %GameClock.current_day
-	team.travel_arrival_day = %GameClock.current_day + days
+	team.travel_departure_day = now
+	team.travel_arrival_day = now + hours / 24.0
 	team.travel_is_return = true
 	if vehicle:
 		team.travel_vehicle_name = vehicle.vehicle_name
 
 	team_departed.emit(team_id)
-	print("[TeamManager] %s began return trip to %s (%.0f km, %d day(s))" % [
-		team.team_name, team.travel_destination_name, distance, days,
+	print("[TeamManager] %s began return trip to %s (%.0f km, %s)" % [
+		team.team_name, team.travel_destination_name, distance,
+		VehicleData.format_duration(hours),
 	])
 
 func _complete_travel(team: TeamData) -> void:

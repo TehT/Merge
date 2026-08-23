@@ -66,8 +66,9 @@ func _deploy_first_team_to_most_urgent() -> void:
 	if plan.is_empty():
 		print("[Debug] deploy failed (team or event not found)")
 		return
-	print("[Debug] %s departed for %s: %.0f km, %d day(s), arriving day %d" % [
-		team.team_name, event.title, plan.distance_km, plan.travel_days, plan.arrival_day,
+	print("[Debug] %s departed for %s: %.0f km, %s, arriving day %.2f" % [
+		team.team_name, event.title, plan.distance_km,
+		VehicleData.format_duration(plan.travel_hours), plan.arrival_time,
 	])
 
 func _train_first_team() -> void:

@@ -28,11 +28,15 @@ var location_name: String = ""
 ## travel_is_return marks the trip home after a mission: agent status
 ## results from that mission are held in pending_agent_results and only
 ## applied once the team is physically back (see TeamManager).
+##
+## travel_departure_day / travel_arrival_day are fractional day counts
+## (GameClock.get_current_time_days()), not whole day indices — travel
+## resolves at hour precision, not on day-tick boundaries.
 var is_traveling: bool = false
 var travel_destination: Vector2 = Vector2.ZERO
 var travel_destination_name: String = ""
-var travel_departure_day: int = 0
-var travel_arrival_day: int = 0
+var travel_departure_day: float = 0.0
+var travel_arrival_day: float = 0.0
 var travel_event_id: String = ""
 var travel_vehicle_name: String = ""
 var travel_is_return: bool = false

@@ -100,9 +100,9 @@ func _update_path(team: TeamData, entry: Dictionary) -> void:
 	var origin: Vector2 = team.location          # (lon, lat)
 	var dest: Vector2 = team.travel_destination  # (lon, lat)
 
-	var total_days := maxf(1.0, float(team.travel_arrival_day - team.travel_departure_day))
-	var day_progress: float = %GameClock.get_day_progress()
-	var elapsed := float(%GameClock.current_day - team.travel_departure_day) + day_progress
+	var total_days := maxf(0.001, team.travel_arrival_day - team.travel_departure_day)
+	var now: float = %GameClock.get_current_time_days()
+	var elapsed := now - team.travel_departure_day
 	var progress := clampf(elapsed / total_days, 0.0, 1.0)
 
 	var origin_sphere := SurfaceMarker.latlon_to_position(origin.y, origin.x, 1.0)

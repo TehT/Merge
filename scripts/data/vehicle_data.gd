@@ -48,9 +48,23 @@ enum Mode { CONTINUOUS, TELEPORT }
 @export_file("*.png", "*.jpg", "*.jpeg", "*.svg") var image_path: String = ""
 
 
-## Travel days for a CONTINUOUS method; always at least 1 so even a short
-## hop reads as "the team is en route" rather than arriving the same day.
-## TELEPORT is instant (0 days) — callers should check can_reach() first.
+## Travel duration in hours. CONTINUOUS scales directly with distance and
+## speed, floored at half an hour (takeoff/landing overhead) so a trip
+## never reads as literally instant. TELEPORT is instant (0 hours) —
+## callers should check can_reach() first.
+func compute_travel_hours(distance_km: float) -> float:
+	match mode:
+		Mode.TELEPORT:
+			return 0.0
+		_:
+			if speed_km_per_day <= 0.0:
+				return 24.0
+			return maxf(0.5, (distance_km / speed_km_per_day) * 24.0)
+
+
+## Old day-granularity estimate — kept for anything that still wants a
+## whole-day figure (e.g. quick console output). Actual scheduling uses
+## compute_travel_hours() for real precision.
 func compute_travel_days(distance_km: float) -> int:
 	match mode:
 		Mode.TELEPORT:
@@ -59,6 +73,14 @@ func compute_travel_days(distance_km: float) -> int:
 			if speed_km_per_day <= 0.0:
 				return 1
 			return maxi(1, int(ceil(distance_km / speed_km_per_day)))
+
+
+## Formats an hour count for display, e.g. "5 hours", "1 hour", "<1 hour".
+static func format_duration(hours: float) -> String:
+	if hours < 1.0:
+		return "<1 hour"
+	var h := int(round(hours))
+	return "%d hour%s" % [h, "" if h == 1 else "s"]
 
 
 func can_reach(distance_km: float) -> bool:

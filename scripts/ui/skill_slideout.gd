@@ -227,9 +227,10 @@ func _make_deploy_row(team: TeamData) -> Control:
 	card.add_child(name_lbl)
 
 	if team.is_traveling:
-		var eta := maxi(0, team.travel_arrival_day - %GameClock.current_day)
+		var hours_left := maxf(0.0, (team.travel_arrival_day - %GameClock.get_current_time_days()) * 24.0)
 		var travel_lbl := Label.new()
-		travel_lbl.text = "En route to %s — %d day(s) left" % [team.travel_destination_name, eta]
+		travel_lbl.text = "En route to %s — %s left" % [
+			team.travel_destination_name, VehicleData.format_duration(hours_left)]
 		travel_lbl.add_theme_font_size_override("font_size", 12)
 		travel_lbl.add_theme_color_override("font_color", Color(0.5, 0.6, 0.8, 1.0))
 		card.add_child(travel_lbl)
@@ -266,9 +267,9 @@ func _make_deploy_row(team: TeamData) -> Control:
 
 	var travel_lbl := Label.new()
 	if in_range:
-		var travel_days := vehicle.compute_travel_days(distance)
-		travel_lbl.text = "%s km — ~%d day(s) via %s" % [
-			_format_distance(distance), travel_days, vehicle.vehicle_name]
+		var travel_hours := vehicle.compute_travel_hours(distance)
+		travel_lbl.text = "%s km — ~%s via %s" % [
+			_format_distance(distance), VehicleData.format_duration(travel_hours), vehicle.vehicle_name]
 	else:
 		travel_lbl.text = "%s km" % _format_distance(distance)
 	travel_lbl.add_theme_font_size_override("font_size", 11)

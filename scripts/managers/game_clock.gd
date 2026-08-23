@@ -67,3 +67,10 @@ func get_day_progress() -> float:
 	if seconds_per_day <= 0.0:
 		return 0.0
 	return clampf(_accum / seconds_per_day, 0.0, 1.0)
+
+## Current moment as a single fractional day count (e.g. 3.25 = a quarter
+## into day 3). The canonical "now" for anything that needs sub-day
+## precision — travel arrival, ETA displays — since current_day alone is
+## too coarse and day_advanced only fires on whole-day boundaries.
+func get_current_time_days() -> float:
+	return float(current_day) + get_day_progress()
