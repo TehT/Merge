@@ -9,6 +9,7 @@ extends Node
 ## 2: list active events
 ## 3: send the first team traveling to the most urgent event (resolves on arrival)
 ## 4: advance 1 day manually      5: advance 7 days manually
+## H: advance 1 hour manually
 ## 6: toggle GameClock pause
 ## 7: print full roster status
 ## 8: print concealment/funding/intel
@@ -26,6 +27,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		KEY_3: _deploy_first_team_to_most_urgent()
 		KEY_4: %GameClock.advance_days(1)
 		KEY_5: %GameClock.advance_days(7)
+		KEY_H: %GameClock.advance_hours(1)
 		KEY_6:
 			%GameClock.toggle_pause()
 			print("[Debug] paused=%s" % [%GameClock.paused])
