@@ -1,15 +1,12 @@
-[gd_resource type="Resource" script_class="VehicleData" load_steps=2 format=3]
+[gd_resource type="Resource" script_class="VehicleData" format=3 uid="uid://b17c1t5xkykoc"]
 
-[ext_resource type="Script" path="res://scripts/data/vehicle_data.gd" id="1_eurocopter"]
+[ext_resource type="Script" uid="uid://d10kwi2a2vgn8" path="res://scripts/data/vehicle_data.gd" id="1_eurocopter"]
 
 [resource]
 script = ExtResource("1_eurocopter")
-vehicle_name = "Airbus H225 (Transport Helicopter)"
-mode = 0
-description = "The Concurrence's primary transport for field teams. Loosely modeled on the Airbus H225/EC725 (real top speed ~320 km/h, cruise ~260 km/h, range ~900-1200 km) with both numbers pushed up a bit — black-budget fuel bladders and disregard for maintenance schedules buy some slack. Questions about the fuel bladders are discouraged."
+vehicle_name = "Airbus H225-A"
+description = "The Agency's primary transport for field teams. Built on the Airbus H225/EC725 airframe this agency variant heavy lifter is both faster and with longer years than their civilian or even military counterparts. 
+"
 speed_kmh = 320.0
 max_range_km = 3000.0
-cooldown_days = 0
 capacity = 8
-operation_cost = 0
-image_path = ""

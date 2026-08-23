@@ -102,8 +102,8 @@ Main                          [GeoscapeController.gd]
     └── Root                  [root_ui.gd]              sidebar layout manager
         ├── TopBar            [top_bar.gd]
         ├── %EventMapLabels   [event_map_labels.gd]     clickable chips over markers
-        ├── %SkillSlideout    [skill_slideout.gd]       secondary pop-out panel
-        ├── LeftSidebar → LeftScroll → %DetailPanel  [detail_panel.gd]
+        ├── %SkillSlideout    [slideout_panel.gd]       secondary pop-out panel
+        ├── LeftSidebar → LeftScroll → %DetailPanel  [detail_sidebar.gd]
         ├── LeftToggle
         └── RightSidebar → Tabs (TabContainer)
             ├── Squads → SquadScroll → %SquadList     [agent_tab.gd]
@@ -408,23 +408,25 @@ Draws, per traveling team, an `ImmediateMesh` line (40 segments) plus a dot at t
 | `top_bar.gd` | `TopBar` | Date, pause, 1x/2x/4x speed, funding, intel, concealment bar with 25/50/75 ticks + threshold flash |
 | `agent_tab.gd` | `%SquadList` | Squad list grouped by team, **drag-and-drop agents between squads**, "+ New Squad" pinned at the bottom outside the scroll |
 | `events_tab.gd` | `%EventList` | Active events sorted by urgency then time |
-| `detail_panel.gd` | `%DetailPanel` | The left panel. Views: `EMPTY, AGENT, TEAM, EVENT, RESULT, HQ` |
-| `skill_slideout.gd` | `%SkillSlideout` | Secondary pop-out. Modes: `PROFICIENCY, DEPLOY, VEHICLE` |
+| `detail_sidebar.gd` | `%DetailPanel` | Left panel **loader** — owns `_View` enum (`EMPTY, AGENT, TEAM, EVENT, RESULT, HQ`), refresh-on-signal wiring, and which `detail_view_*.gd` is currently instantiated. Doesn't build any UI itself. |
+| `slideout_panel.gd` | `%SkillSlideout` | Pop-out **loader** — owns panel chrome (styling, scroll area), `_Mode` enum (`PROFICIENCY, DEPLOY, VEHICLE`), and which `slideout_view_*.gd` is currently instantiated. |
 | `event_map_labels.gd` | `%EventMapLabels` | Screen-space clickable title chips above each event pin |
 
-**`detail_panel.gd` views in detail:**
-- **AGENT** — proficiency rank pips (clickable → slideout), condition, team, supernatural
-- **TEAM** — editable name (`LineEdit`), members, cohesion, **location / en-route ETA**, team proficiency ranks, member list
-- **EVENT** — title, urgency, **"Deploy Team ›"** (placed high, above the fold), satellite mini-map, location, days left, requirement pips, stakes, rewards
-- **HQ** — vehicles (clickable rows → slideout), squads with location/ETA, Equipment & Base Upgrades placeholders
-- **RESULT** — travel confirmation (distance/days/arrival) *and* mission report (outcome, suitability, chance, roll, per-agent outcomes)
+**Detail views** (each `extends "res://scripts/ui/detail_view_base.gd"` by path — no `class_name`, so no global-class-cache registration needed; the loader `preload()`s each script and calls `.new()`):
+- `detail_view_base.gd` — shared helpers (`_add_title`, `_add_subtitle`, `_add_section`, `_add_info_row`, `_add_prof_rank_row`, `_status_color`, `_status_name_for`)
+- `detail_view_agent.gd` — proficiency rank pips (clickable → slideout), condition, team, supernatural
+- `detail_view_team.gd` — editable name (`LineEdit`), members, cohesion, location/en-route ETA, team proficiency ranks, member list
+- `detail_view_event.gd` — title, urgency, "Deploy Team ›" (placed high, above the fold), satellite mini-map, location, days left, requirement pips, stakes, rewards
+- `detail_view_hq.gd` — vehicles (clickable rows → slideout), squads with location/ETA, Equipment & Base Upgrades placeholders
+- `detail_view_result.gd` — two populate entry points on one shell: `populate_travel_confirmation()` (distance/hours/arrival) and `populate_mission_result()` (outcome, suitability, chance, roll, per-agent outcomes); both take an `on_close: Callable` since returning to the empty state is the loader's job, not the view's
 
-**`skill_slideout.gd` modes:**
-- **PROFICIENCY** — rank pips, category description, per-skill cards with rank pips + tag chips
-- **DEPLOY** — every non-empty squad with match %, availability, **distance + travel days + chosen vehicle**, Deploy button
-- **VEHICLE** — image slot (or placeholder), mode, speed, range, capacity, op cost, description
+**Slideout views** (same by-path pattern, `extends "res://scripts/ui/slideout_view_base.gd"`):
+- `slideout_view_base.gd` — shared `_add_header(title, on_close, color, font_size)` (header row + "✕" wired to a passed-in close callable)
+- `slideout_view_proficiency.gd` — rank pips, category description, per-skill cards with rank pips + tag chips
+- `slideout_view_deploy.gd` — every non-empty squad with match %, availability, distance + travel time + a vehicle dropdown (auto-selects the best fit, overridable), Deploy button
+- `slideout_view_vehicle.gd` — image slot (or placeholder), mode, speed, range, capacity, op cost, description
 
-Clicking the same trigger twice toggles the slideout closed.
+Clicking the same trigger twice toggles the slideout closed. Views that need to close themselves (Deploy on successful dispatch, Result's Close button) receive the loader's `dismiss`/`show_empty` method as a `Callable` parameter rather than reaching for `%SkillSlideout`/`%DetailPanel` directly — keeps the view scripts decoupled from the loader's internals, only coupled to its public API.
 
 #### `scripts/debug/debug_driver.gd`
 Raw-keycode harness (matches `GeoscapeController`'s existing pattern; no InputMap actions anywhere in the project):

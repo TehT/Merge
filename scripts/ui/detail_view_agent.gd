@@ -1,0 +1,79 @@
+extends "res://scripts/ui/detail_view_base.gd"
+## DetailViewAgent — full agent sheet: proficiency ranks (clickable, opens
+## the skill drill-down slideout), condition, team, supernatural info.
+
+func populate(agent: AgentData) -> void:
+	_add_title(agent.agent_name)
+	_add_subtitle("%s  —  %s" % [agent.get_status_name(), agent.get_type_name()], _status_color(agent.status))
+
+	add_child(HSeparator.new())
+
+	_add_section("Proficiencies")
+	var ranks := agent.get_proficiency_ranks()
+	for key: String in SkillData.PROFICIENCY_KEYS:
+		if ranks[key] > 0:
+			_add_clickable_prof_rank(key, ranks[key], SkillData.PROFICIENCY_COLORS[key], agent)
+
+	add_child(HSeparator.new())
+
+	_add_section("Condition")
+	_add_info_row("Health", "%d / %d" % [int(agent.health), int(agent.max_health)])
+	_add_info_row("Morale", "%d" % int(agent.morale))
+	_add_info_row("Level", "%d" % agent.level)
+	_add_info_row("XP", "%d" % agent.experience)
+
+	var team: TeamData = %TeamManager.get_team_of_agent(agent.id)
+	if team:
+		add_child(HSeparator.new())
+		_add_info_row("Team", team.team_name)
+		_add_info_row("Cohesion", "%.0f%%" % team.cohesion)
+
+	if agent.supernatural_type != AgentData.SupernaturalType.NONE:
+		add_child(HSeparator.new())
+		_add_section("Supernatural")
+		_add_info_row("Type", agent.get_type_name())
+		_add_info_row("Power", "%.0f" % agent.supernatural_power)
+
+
+func _add_clickable_prof_rank(prof_key: String, rank: int, color: Color, agent: AgentData) -> void:
+	var row := HBoxContainer.new()
+	row.mouse_filter = Control.MOUSE_FILTER_STOP
+	row.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	row.add_theme_constant_override("separation", 6)
+
+	var lbl := Label.new()
+	lbl.text = prof_key.capitalize()
+	lbl.custom_minimum_size.x = 80
+	lbl.add_theme_font_size_override("font_size", 13)
+	lbl.add_theme_color_override("font_color", color)
+	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(lbl)
+
+	var pips := HBoxContainer.new()
+	pips.add_theme_constant_override("separation", 3)
+	pips.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	pips.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var visible_max: int = SkillData.VISIBLE_MAX_RANK
+	for i in range(visible_max):
+		var pip := ColorRect.new()
+		pip.custom_minimum_size = Vector2(16, 16)
+		pip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		if i < rank:
+			pip.color = color
+		else:
+			pip.color = Color(0.15, 0.16, 0.2, 1.0)
+		pips.add_child(pip)
+	row.add_child(pips)
+
+	var arrow := Label.new()
+	arrow.text = "›"
+	arrow.add_theme_font_size_override("font_size", 16)
+	arrow.add_theme_color_override("font_color", Color(0.4, 0.42, 0.48, 1.0))
+	arrow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(arrow)
+
+	row.gui_input.connect(func(ev: InputEvent) -> void:
+		if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
+			%SkillSlideout.show_proficiency(agent, prof_key))
+
+	add_child(row)
