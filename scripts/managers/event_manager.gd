@@ -18,11 +18,15 @@ var magic_intensity: float = 1.0
 @export var base_spawn_chance_per_day: float = 0.35
 
 ## The "black box" mission resolver — Strategy pattern (see
-## scripts/managers/resolution/). Swappable in the Inspector or at runtime
-## (e.g. Game.event_manager.resolution_strategy = GauntletResolutionStrategy.new())
-## without touching any of the spawn/travel/arrival logic below. Defaults
-## to the original single stat-roll behavior if left unassigned.
-@export var resolution_strategy: MissionResolutionStrategy
+## scripts/managers/resolution/). A live default instance (rather than
+## null) so the Inspector shows a populated, expandable resource on this
+## node from the start — an unset Resource-typed @export shows as
+## "[empty]" with nothing to click into. Swap it in the Inspector (drag in
+## a different strategy .tres, or use the dropdown arrow to pick "New
+## GauntletResolutionStrategy" once one exists), or reassign it at
+## runtime (Game.event_manager.resolution_strategy = X.new()), without
+## touching any of the spawn/travel/arrival logic below.
+@export var resolution_strategy: MissionResolutionStrategy = StatCheckResolutionStrategy.new()
 
 @onready var _geo_data: GeoData = Game.geo_data
 

@@ -21,7 +21,7 @@ config/icon="res://icon.svg"
 
 [autoload]
 
-Game="*res://scripts/game.gd"
+Game="*uid://bnk82tgsl5twh"
 
 [display]
 
