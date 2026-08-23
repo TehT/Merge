@@ -386,7 +386,10 @@ func _populate_vehicle() -> void:
 	_content.add_child(HSeparator.new())
 
 	_add_vehicle_stat("Mode", v.get_mode_name())
-	_add_vehicle_stat("Speed", "%d km/day" % int(v.speed_km_per_day))
+	if v.mode == VehicleData.Mode.TELEPORT:
+		_add_vehicle_stat("Speed", "Instant")
+	else:
+		_add_vehicle_stat("Speed", "%d km/h" % int(round(v.speed_kmh)))
 	_add_vehicle_stat("Range", "%d km" % int(v.max_range_km) if v.max_range_km > 0.0 else "Unlimited")
 	_add_vehicle_stat("Capacity", "%d agents" % v.capacity)
 	_add_vehicle_stat("Operation Cost", "%d funding" % v.operation_cost if v.operation_cost > 0 else "None")

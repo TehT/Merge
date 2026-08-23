@@ -25,8 +25,8 @@ enum Mode { CONTINUOUS, TELEPORT }
 @export var mode: Mode = Mode.CONTINUOUS
 @export_multiline var description: String = ""
 
-## CONTINUOUS only: km covered per in-game day.
-@export var speed_km_per_day: float = 0.0
+## CONTINUOUS only: cruising speed in km/h.
+@export var speed_kmh: float = 0.0
 
 ## Max distance reachable in one hop (0 = unlimited). TELEPORT also uses
 ## this as its per-jump range.
@@ -55,22 +55,9 @@ func compute_travel_hours(distance_km: float) -> float:
 		Mode.TELEPORT:
 			return 0.0
 		_:
-			if speed_km_per_day <= 0.0:
+			if speed_kmh <= 0.0:
 				return 24.0
-			return maxf(0.5, (distance_km / speed_km_per_day) * 24.0)
-
-
-## Old day-granularity estimate — kept for anything that still wants a
-## whole-day figure (e.g. quick console output). Actual scheduling uses
-## compute_travel_hours() for real precision.
-func compute_travel_days(distance_km: float) -> int:
-	match mode:
-		Mode.TELEPORT:
-			return 0
-		_:
-			if speed_km_per_day <= 0.0:
-				return 1
-			return maxi(1, int(ceil(distance_km / speed_km_per_day)))
+			return maxf(0.5, distance_km / speed_kmh)
 
 
 ## Formats an hour count for display, e.g. "5 hours", "1 hour", "<1 hour".

@@ -357,8 +357,8 @@ func _make_vehicle_row(vehicle: VehicleData) -> Control:
 	info.add_child(name_lbl)
 
 	var stats_lbl := Label.new()
-	stats_lbl.text = "%d km/day  •  %d km range  •  %d cap" % [
-		int(vehicle.speed_km_per_day), int(vehicle.max_range_km), vehicle.capacity]
+	stats_lbl.text = "%d km/h  •  %d km range  •  %d cap" % [
+		int(round(vehicle.speed_kmh)), int(vehicle.max_range_km), vehicle.capacity]
 	stats_lbl.add_theme_font_size_override("font_size", 11)
 	stats_lbl.add_theme_color_override("font_color", Color(0.55, 0.55, 0.6, 1.0))
 	info.add_child(stats_lbl)

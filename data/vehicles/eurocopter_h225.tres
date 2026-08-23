@@ -6,8 +6,8 @@
 script = ExtResource("1_eurocopter")
 vehicle_name = "Airbus H225 (Transport Helicopter)"
 mode = 0
-description = "The Concurrence's primary transport for field teams. Loosely modeled on the Airbus H225/EC725 (real cruise ~260 km/h, range ~900-1200 km) with both numbers pushed up a bit — black-budget fuel bladders and disregard for maintenance schedules buy some slack. Questions about the fuel bladders are discouraged."
-speed_km_per_day = 2400.0
+description = "The Concurrence's primary transport for field teams. Loosely modeled on the Airbus H225/EC725 (real top speed ~320 km/h, cruise ~260 km/h, range ~900-1200 km) with both numbers pushed up a bit — black-budget fuel bladders and disregard for maintenance schedules buy some slack. Questions about the fuel bladders are discouraged."
+speed_kmh = 320.0
 max_range_km = 3000.0
 cooldown_days = 0
 capacity = 8
