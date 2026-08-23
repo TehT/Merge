@@ -1,15 +1,17 @@
-## VehicleData — a transport the base owns. Starts with a transport
-## helicopter (continuous, speed-based); later vehicles like magical
-## carriages are just other CONTINUOUS presets with a higher speed/range,
-## and TELEPORT is the seam for future teleportation (instant, but
-## range-limited and cooldown-gated) — not fully wired up yet, since only
-## the helicopter exists so far.
+## VehicleData — a generic transport template. The base's actual fleet is
+## built from saved instances of this resource (see res://data/vehicles/),
+## not from code — e.g. eurocopter_h225.tres holds the starting transport
+## helicopter's stats. Adding a new vehicle to the game is authoring a new
+## .tres, not editing this script. CONTINUOUS (speed-based) is the only
+## mode wired up so far; TELEPORT is the seam for future teleportation
+## (instant, but range-limited and cooldown-gated).
 ##
 ## max_range_km applies to both modes: it's "how far this transport can
-## reach in one hop," full stop — for the helicopter that's operational
-## range before it'd need a leg no game system models yet (refueling
-## stops, forward bases), so distant events are simply out of reach until
-## a longer-ranged transport comes online, not just slow to get to.
+## reach in one hop," full stop — a CONTINUOUS vehicle's range is its
+## operational range before it'd need a leg no game system models yet
+## (refueling stops, forward bases), so distant events are simply out of
+## reach until a longer-ranged transport comes online, not just slow to
+## get to.
 ##
 ## TeamManager owns the fleet (Array[VehicleData]) and picks the best fit
 ## per deployment (see get_best_vehicle) — vehicles aren't tied to one
@@ -19,25 +21,21 @@ extends Resource
 
 enum Mode { CONTINUOUS, TELEPORT }
 
-## Loosely modeled on the Airbus H225/EC725 (real cruise ~260 km/h, range
-## ~900-1200 km) with both numbers pushed up a bit — black-budget fuel
-## bladders and disregard for maintenance schedules buy some slack.
-@export var vehicle_name: String = "Airbus H225 (Transport Helicopter)"
+@export var vehicle_name: String = "Unnamed Vehicle"
 @export var mode: Mode = Mode.CONTINUOUS
-@export_multiline var description: String = "The Concurrence's primary transport for field teams. Modified for extended range and speed beyond factory spec — questions about the fuel bladders are discouraged."
+@export_multiline var description: String = ""
 
 ## CONTINUOUS only: km covered per in-game day.
-@export var speed_km_per_day: float = 2400.0
+@export var speed_km_per_day: float = 0.0
 
 ## Max distance reachable in one hop (0 = unlimited). TELEPORT also uses
 ## this as its per-jump range.
-@export var max_range_km: float = 3000.0
+@export var max_range_km: float = 0.0
 ## TELEPORT only: days before reuse.
 @export var cooldown_days: int = 0
 
-## Max agents it can carry in one trip. Squads are 3-5, so this leaves a
-## little headroom for gear/passengers.
-@export var capacity: int = 8
+## Max agents it can carry in one trip. Squads are 3-5.
+@export var capacity: int = 5
 
 ## Funding cost per dispatch. Informational for now — not yet deducted
 ## when a team departs; see TeamManager.begin_travel if that changes.

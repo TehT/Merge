@@ -217,8 +217,8 @@ func _make_deploy_row(team: TeamData) -> Control:
 	var available := _get_available_team_members(team)
 	var distance := GeoData.haversine_km(team.location.y, team.location.x,
 			_active_event.geo_coordinates.y, _active_event.geo_coordinates.x)
-	var vehicle: VehicleData = %TeamManager.get_best_vehicle(distance, available.size())
-	var in_range := vehicle != null
+	var best_vehicle: VehicleData = %TeamManager.get_best_vehicle(distance, available.size())
+	var in_range := best_vehicle != null
 	var can_deploy := not available.is_empty() and not team.is_traveling and in_range
 
 	var name_lbl := Label.new()
@@ -236,14 +236,6 @@ func _make_deploy_row(team: TeamData) -> Control:
 		card.add_child(travel_lbl)
 		card.add_child(HSeparator.new())
 		return card
-
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 8)
-	card.add_child(row)
-
-	var info_col := VBoxContainer.new()
-	info_col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.add_child(info_col)
 
 	var match_lbl := Label.new()
 	if not in_range:
@@ -263,18 +255,30 @@ func _make_deploy_row(team: TeamData) -> Control:
 		else:
 			match_lbl.add_theme_color_override("font_color", Color(0.85, 0.35, 0.3, 1.0))
 	match_lbl.add_theme_font_size_override("font_size", 12)
-	info_col.add_child(match_lbl)
+	card.add_child(match_lbl)
 
 	var travel_lbl := Label.new()
-	if in_range:
-		var travel_hours := vehicle.compute_travel_hours(distance)
-		travel_lbl.text = "%s km — ~%s via %s" % [
-			_format_distance(distance), VehicleData.format_duration(travel_hours), vehicle.vehicle_name]
-	else:
-		travel_lbl.text = "%s km" % _format_distance(distance)
 	travel_lbl.add_theme_font_size_override("font_size", 11)
 	travel_lbl.add_theme_color_override("font_color", Color(0.55, 0.55, 0.6, 1.0))
-	info_col.add_child(travel_lbl)
+	card.add_child(travel_lbl)
+
+	var vehicle_dropdown: OptionButton = null
+	if in_range:
+		vehicle_dropdown = _make_vehicle_dropdown(distance, available.size(), best_vehicle)
+		vehicle_dropdown.item_selected.connect(func(_idx: int) -> void:
+			_update_travel_label(travel_lbl, vehicle_dropdown, distance))
+		card.add_child(vehicle_dropdown)
+		_update_travel_label(travel_lbl, vehicle_dropdown, distance)
+	else:
+		travel_lbl.text = "%s km" % _format_distance(distance)
+
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	card.add_child(row)
+
+	var spacer := Control.new()
+	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(spacer)
 
 	var deploy_btn := Button.new()
 	deploy_btn.text = "Deploy"
@@ -282,12 +286,48 @@ func _make_deploy_row(team: TeamData) -> Control:
 	deploy_btn.focus_mode = Control.FOCUS_NONE
 	if can_deploy:
 		deploy_btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	deploy_btn.pressed.connect(_on_deploy_pressed.bind(team))
+	deploy_btn.pressed.connect(_on_deploy_pressed.bind(team, vehicle_dropdown))
 	row.add_child(deploy_btn)
 
 	card.add_child(HSeparator.new())
 
 	return card
+
+
+## Lists every fleet vehicle for this trip, eligible ones selectable and
+## the auto-picked best one pre-selected; ineligible ones shown disabled
+## with why, so the fleet stays visible even when it can't help right now.
+func _make_vehicle_dropdown(distance: float, team_size: int, default_vehicle: VehicleData) -> OptionButton:
+	var dropdown := OptionButton.new()
+	dropdown.focus_mode = Control.FOCUS_NONE
+	dropdown.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+
+	var fleet: Array[VehicleData] = %TeamManager.vehicles
+	var default_idx := 0
+	for i in range(fleet.size()):
+		var v: VehicleData = fleet[i]
+		var eligible := v.can_reach(distance) and v.can_carry(team_size)
+		var label := v.vehicle_name
+		if not eligible:
+			label += " — out of range" if not v.can_reach(distance) else " — over capacity"
+		dropdown.add_item(label)
+		dropdown.set_item_metadata(i, v)
+		dropdown.set_item_disabled(i, not eligible)
+		if v == default_vehicle:
+			default_idx = i
+
+	dropdown.select(default_idx)
+	return dropdown
+
+
+func _update_travel_label(label: Label, dropdown: OptionButton, distance: float) -> void:
+	var vehicle: VehicleData = dropdown.get_item_metadata(dropdown.get_selected())
+	if vehicle == null:
+		label.text = "%s km" % _format_distance(distance)
+		return
+	var hours := vehicle.compute_travel_hours(distance)
+	label.text = "%s km — ~%s via %s" % [
+		_format_distance(distance), VehicleData.format_duration(hours), vehicle.vehicle_name]
 
 
 func _format_distance(km: float) -> String:
@@ -302,10 +342,13 @@ func _format_distance(km: float) -> String:
 	return out
 
 
-func _on_deploy_pressed(team: TeamData) -> void:
+func _on_deploy_pressed(team: TeamData, dropdown: OptionButton) -> void:
 	var team_name := team.team_name
 	var ev_title := _active_event.title
-	var plan: Dictionary = %EventManager.deploy_team(_active_event.id, team.id)
+	var selected_vehicle: VehicleData = null
+	if dropdown:
+		selected_vehicle = dropdown.get_item_metadata(dropdown.get_selected())
+	var plan: Dictionary = %EventManager.deploy_team(_active_event.id, team.id, selected_vehicle)
 	if plan.is_empty():
 		return
 	dismiss()

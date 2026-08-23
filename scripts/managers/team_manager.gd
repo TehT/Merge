@@ -23,11 +23,14 @@ signal team_arrived(team_id: String, event_id: String)
 const HQ_LOCATION := Vector2(13.405, 52.52)
 const HQ_NAME := "HQ (Berlin, Germany)"
 
-## The base's fleet. Deploying a team auto-picks the best fit from here
-## (see get_best_vehicle) rather than teams owning a fixed transport —
-## growing this list (magical vehicle, teleport pad, ...) is how travel
-## options expand later in the game.
-var vehicles: Array[VehicleData] = [VehicleData.new()]
+## The base's fleet, loaded from saved VehicleData resources (see
+## res://data/vehicles/). Deploying a team auto-picks the best fit from
+## here (see get_best_vehicle) rather than teams owning a fixed transport
+## — adding a new .tres here is how travel options expand later in the
+## game, no code changes needed.
+var vehicles: Array[VehicleData] = [
+	preload("res://data/vehicles/eurocopter_h225.tres"),
+]
 
 var teams: Array[TeamData] = []
 
@@ -96,15 +99,22 @@ func get_best_vehicle(distance_km: float, team_size: int) -> VehicleData:
 ## vehicle can reach the destination / carry the whole team. Marks members
 ## DEPLOYED — actual mission resolution happens later, on arrival
 ## (EventManager listens for team_arrived).
-func begin_travel(team_id: String, destination: Vector2, destination_name: String, event_id: String) -> Dictionary:
+##
+## vehicle_override lets a caller (the deploy UI's dropdown) pick a
+## specific fleet vehicle instead of the auto-selected best fit — still
+## validated here (range + capacity) rather than trusted blindly, so
+## TeamManager stays the single source of truth for what's actually
+## possible.
+func begin_travel(team_id: String, destination: Vector2, destination_name: String, event_id: String,
+		vehicle_override: VehicleData = null) -> Dictionary:
 	var team := get_team(team_id)
 	if team == null:
 		return {}
 
 	var distance := GeoData.haversine_km(team.location.y, team.location.x, destination.y, destination.x)
-	var vehicle := get_best_vehicle(distance, team.member_ids.size())
-	if vehicle == null:
-		push_warning("[TeamManager] no fleet vehicle can reach %s (%.0f km) with a team of %d" % [
+	var vehicle := vehicle_override if vehicle_override != null else get_best_vehicle(distance, team.member_ids.size())
+	if vehicle == null or not vehicle.can_reach(distance) or not vehicle.can_carry(team.member_ids.size()):
+		push_warning("[TeamManager] no usable vehicle to reach %s (%.0f km) with a team of %d" % [
 			destination_name, distance, team.member_ids.size(),
 		])
 		return {}

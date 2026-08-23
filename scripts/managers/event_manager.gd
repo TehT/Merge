@@ -132,8 +132,10 @@ func _spawn_escalation(parent: EventData) -> void:
 ## see _tick_active_events) and hands off to TeamManager.begin_travel() for
 ## the actual travel-time math. The mission resolves later, when
 ## TeamManager fires team_arrived. Returns the travel plan dict from
-## begin_travel(), or {} if the event/team don't exist.
-func deploy_team(event_id: String, team_id: String) -> Dictionary:
+## begin_travel(), or {} if the event/team don't exist. vehicle_override
+## forwards straight to begin_travel() (the deploy UI's dropdown pick);
+## omit it to auto-select the best fleet vehicle.
+func deploy_team(event_id: String, team_id: String, vehicle_override: VehicleData = null) -> Dictionary:
 	var event := get_event_by_id(event_id)
 	if event == null:
 		return {}
@@ -142,7 +144,8 @@ func deploy_team(event_id: String, team_id: String) -> Dictionary:
 		push_warning("[EventManager] no such team: %s" % team_id)
 		return {}
 
-	var plan: Dictionary = %TeamManager.begin_travel(team_id, event.geo_coordinates, event.location_city, event_id)
+	var plan: Dictionary = %TeamManager.begin_travel(
+			team_id, event.geo_coordinates, event.location_city, event_id, vehicle_override)
 	if plan.is_empty():
 		return {}
 
