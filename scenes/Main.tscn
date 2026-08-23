@@ -59,18 +59,23 @@ script = ExtResource("5_debugdriver")
 [node name="GameClock" type="Node" parent="." unique_id=422667358]
 unique_name_in_owner = true
 script = ExtResource("6_gameclock")
+seconds_per_day = null
 
 [node name="ResourceState" type="Node" parent="." unique_id=1751736826]
 unique_name_in_owner = true
 script = ExtResource("7_resourcestate")
+starting_funding = null
+starting_intel = null
 
 [node name="ConcealmentState" type="Node" parent="." unique_id=1065680669]
 unique_name_in_owner = true
 script = ExtResource("8_concealmentstate")
+daily_decay = null
 
 [node name="AgentManager" type="Node" parent="." unique_id=1178527809]
 unique_name_in_owner = true
 script = ExtResource("9_agentmanager")
+roster = null
 
 [node name="TeamManager" type="Node" parent="." unique_id=1533351038]
 unique_name_in_owner = true
@@ -79,6 +84,8 @@ script = ExtResource("12_teammanager")
 [node name="EventManager" type="Node" parent="." unique_id=388966121]
 unique_name_in_owner = true
 script = ExtResource("10_eventmanager")
+magic_intensity_growth_per_day = null
+base_spawn_chance_per_day = null
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=1588015448]
 environment = SubResource("Environment_1")
@@ -365,3 +372,5 @@ offset_bottom = 80.0
 grow_horizontal = 0
 focus_mode = 0
 text = "▶"
+
+[node name="Game" type="Node" parent="." unique_id=592092588]
