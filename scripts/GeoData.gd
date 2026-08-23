@@ -3,13 +3,16 @@ extends Node
 
 ## Provides geographic lookups: country at a point, nearest city, distance calculations.
 ## Requires country_index_map.png (RGB, ID encoded in R<<8|G) and
-## countries.json + cities.json in res://data/.
+## countries.json + cities.json in res://data/. Referenced elsewhere via
+## Game.geo_data (registers itself in _ready() — see game.gd).
 
 var _country_image: Image
 var _countries: Dictionary  # id string -> { name, iso_a3, sovereign }
 var _cities: Array  # [{ name, country, region, lat, lon, pop, capital, class }]
 
 func _ready() -> void:
+	Game.geo_data = self
+
 	# Load country index map for pixel lookups
 	var country_tex := load("res://textures/country_index_map.png") as Texture2D
 	if country_tex:

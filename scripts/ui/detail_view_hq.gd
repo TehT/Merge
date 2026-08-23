@@ -3,13 +3,13 @@ extends "res://scripts/ui/detail_view_base.gd"
 ## slideout), squads and their status, Equipment/Base Upgrades placeholders.
 
 func populate() -> void:
-	_add_title(%TeamManager.HQ_NAME)
+	_add_title(Game.team_manager.HQ_NAME)
 	_add_subtitle("Home base", Color(0.55, 0.55, 0.6, 1.0))
 
 	add_child(HSeparator.new())
 
 	_add_section("Vehicles")
-	var vehicles: Array[VehicleData] = %TeamManager.vehicles
+	var vehicles: Array[VehicleData] = Game.team_manager.vehicles
 	if vehicles.is_empty():
 		_add_placeholder_row("No vehicles in the fleet.")
 	else:
@@ -18,7 +18,7 @@ func populate() -> void:
 
 	add_child(HSeparator.new())
 	_add_section("Squads")
-	var teams: Array[TeamData] = %TeamManager.teams
+	var teams: Array[TeamData] = Game.team_manager.teams
 	if teams.is_empty():
 		var none_lbl := Label.new()
 		none_lbl.text = "No squads formed yet."
@@ -28,7 +28,7 @@ func populate() -> void:
 	else:
 		for team: TeamData in teams:
 			if team.is_traveling:
-				var hours_left := maxf(0.0, (team.travel_arrival_day - %GameClock.get_current_time_days()) * 24.0)
+				var hours_left := maxf(0.0, (team.travel_arrival_day - Game.game_clock.get_current_time_days()) * 24.0)
 				_add_info_row(team.team_name, "En route to %s (%s)" % [
 					team.travel_destination_name, VehicleData.format_duration(hours_left)])
 			else:
@@ -74,6 +74,6 @@ func _make_vehicle_row(vehicle: VehicleData) -> Control:
 
 	row.gui_input.connect(func(input_event: InputEvent) -> void:
 		if input_event is InputEventMouseButton and input_event.pressed and input_event.button_index == MOUSE_BUTTON_LEFT:
-			%SkillSlideout.show_vehicle(vehicle))
+			Game.slideout_panel.show_vehicle(vehicle))
 
 	return row

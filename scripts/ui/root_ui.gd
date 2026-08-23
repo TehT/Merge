@@ -22,7 +22,7 @@ func _ready() -> void:
 	%MarkerLayer.event_marker_clicked.connect(_on_event_selected)
 	%MarkerLayer.hq_marker_clicked.connect(_on_hq_selected)
 
-	%SkillSlideout.visibility_changed.connect(func() -> void:
+	Game.slideout_panel.visibility_changed.connect(func() -> void:
 		_apply_slideout(true))
 
 	_apply_left(false)
@@ -30,22 +30,22 @@ func _ready() -> void:
 
 
 func _on_agent_selected(agent: AgentData) -> void:
-	%DetailPanel.show_agent(agent)
+	Game.detail_sidebar.show_agent(agent)
 	_open_left()
 
 
 func _on_team_selected(team: TeamData) -> void:
-	%DetailPanel.show_team(team)
+	Game.detail_sidebar.show_team(team)
 	_open_left()
 
 
 func _on_hq_selected() -> void:
-	%DetailPanel.show_hq()
+	Game.detail_sidebar.show_hq()
 	_open_left()
 
 
 func _on_event_selected(ev: EventData) -> void:
-	%DetailPanel.show_event(ev)
+	Game.detail_sidebar.show_event(ev)
 	_open_left()
 
 
@@ -89,17 +89,17 @@ func _apply_left(animate: bool) -> void:
 
 func _apply_slideout(animate: bool) -> void:
 	var base := SIDEBAR_W + TOGGLE_W if _left_open else TOGGLE_W
-	var so_visible: bool = %SkillSlideout.visible
+	var so_visible: bool = Game.slideout_panel.visible
 	var so_l := base if so_visible else base - SLIDEOUT_W
 	var so_r := base + SLIDEOUT_W if so_visible else base
 
 	if animate:
 		var tw := create_tween().set_parallel()
-		tw.tween_property(%SkillSlideout, "offset_left", so_l, ANIM_SPEED)
-		tw.tween_property(%SkillSlideout, "offset_right", so_r, ANIM_SPEED)
+		tw.tween_property(Game.slideout_panel, "offset_left", so_l, ANIM_SPEED)
+		tw.tween_property(Game.slideout_panel, "offset_right", so_r, ANIM_SPEED)
 	else:
-		%SkillSlideout.offset_left = so_l
-		%SkillSlideout.offset_right = so_r
+		Game.slideout_panel.offset_left = so_l
+		Game.slideout_panel.offset_right = so_r
 
 
 func _apply_right(animate: bool) -> void:

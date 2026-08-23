@@ -1,9 +1,14 @@
 extends VBoxContainer
-## DetailSidebar — left sidebar loader. Owns which view is currently shown
-## and the signal wiring that decides when to refresh it; the actual
-## content-building for each view type lives in its own script
-## (detail_view_*.gd) so this file stays a thin dispatcher instead of a
-## monolith covering all five view types.
+class_name DetailSidebar
+## DetailSidebar — left sidebar loader, referenced elsewhere via
+## Game.detail_sidebar (registers itself in _ready() — see game.gd; used
+## instead of %DetailPanel specifically so the dynamically-created
+## detail_view_*.gd instances can reach it — see game.gd's header for
+## why %-lookups don't reliably work from runtime-created nodes). Owns
+## which view is currently shown and the signal wiring that decides when
+## to refresh it; the actual content-building for each view type lives in
+## its own script (detail_view_*.gd) so this file stays a thin dispatcher
+## instead of a monolith covering all five view types.
 
 const DetailViewAgent := preload("res://scripts/ui/detail_view_agent.gd")
 const DetailViewTeam := preload("res://scripts/ui/detail_view_team.gd")
@@ -20,19 +25,20 @@ var _view_event: EventData
 var _refresh_pending := false
 
 func _ready() -> void:
+	Game.detail_sidebar = self
 	add_theme_constant_override("separation", 6)
 
-	%TeamManager.membership_changed.connect(func(_tid: String) -> void: _schedule_refresh())
-	%TeamManager.cohesion_changed.connect(func(_tid: String, _v: float, _d: float) -> void: _schedule_refresh())
-	%TeamManager.training_started.connect(func(_tid: String) -> void: _schedule_refresh())
-	%TeamManager.training_completed.connect(func(_tid: String) -> void: _schedule_refresh())
-	%TeamManager.team_departed.connect(func(_tid: String) -> void: _schedule_refresh())
-	%TeamManager.team_arrived.connect(func(_tid: String, _eid: String) -> void: _schedule_refresh())
-	%TeamManager.team_created.connect(func(_t: TeamData) -> void: _schedule_refresh())
-	%TeamManager.team_renamed.connect(func(_tid: String) -> void: _schedule_refresh())
-	%AgentManager.agent_status_changed.connect(func(_aid: String, _o: AgentData.Status, _n: AgentData.Status) -> void: _schedule_refresh())
-	%AgentManager.roster_changed.connect(_schedule_refresh)
-	%EventManager.event_resolved.connect(_on_mission_resolved)
+	Game.team_manager.membership_changed.connect(func(_tid: String) -> void: _schedule_refresh())
+	Game.team_manager.cohesion_changed.connect(func(_tid: String, _v: float, _d: float) -> void: _schedule_refresh())
+	Game.team_manager.training_started.connect(func(_tid: String) -> void: _schedule_refresh())
+	Game.team_manager.training_completed.connect(func(_tid: String) -> void: _schedule_refresh())
+	Game.team_manager.team_departed.connect(func(_tid: String) -> void: _schedule_refresh())
+	Game.team_manager.team_arrived.connect(func(_tid: String, _eid: String) -> void: _schedule_refresh())
+	Game.team_manager.team_created.connect(func(_t: TeamData) -> void: _schedule_refresh())
+	Game.team_manager.team_renamed.connect(func(_tid: String) -> void: _schedule_refresh())
+	Game.agent_manager.agent_status_changed.connect(func(_aid: String, _o: AgentData.Status, _n: AgentData.Status) -> void: _schedule_refresh())
+	Game.agent_manager.roster_changed.connect(_schedule_refresh)
+	Game.event_manager.event_resolved.connect(_on_mission_resolved)
 
 	show_empty()
 
@@ -131,6 +137,6 @@ func show_empty() -> void:
 
 
 func _clear() -> void:
-	%SkillSlideout.dismiss()
+	Game.slideout_panel.dismiss()
 	for child in get_children():
 		child.queue_free()

@@ -76,18 +76,18 @@ func _ready() -> void:
 
 	_create_hq_marker()
 
-	# The whole scene tree (including %EventManager) already exists by the
+	# The whole scene tree (including Game.event_manager) already exists by the
 	# time any node's _ready() runs, so this is always safe regardless of
 	# sibling order.
-	%EventManager.event_spawned.connect(_on_event_spawned)
-	%EventManager.event_expired.connect(_on_event_expired)
-	%EventManager.event_resolved.connect(_on_event_resolved)
+	Game.event_manager.event_spawned.connect(_on_event_spawned)
+	Game.event_manager.event_expired.connect(_on_event_expired)
+	Game.event_manager.event_resolved.connect(_on_event_resolved)
 
 
 ## Permanent diamond icon at HQ's location. Not tied to the event
 ## lifecycle, so it's created once here rather than via add/remove signals.
 func _create_hq_marker() -> void:
-	var hq_marker := add_site(%TeamManager.HQ_NAME, %TeamManager.HQ_LOCATION.y, %TeamManager.HQ_LOCATION.x)
+	var hq_marker := add_site(Game.team_manager.HQ_NAME, Game.team_manager.HQ_LOCATION.y, Game.team_manager.HQ_LOCATION.x)
 	hq_marker.marker_size = 0.09
 	hq_marker.is_base = true
 	hq_marker.set_color(Color(0.95, 0.9, 0.6))
@@ -183,7 +183,7 @@ func _on_globe_clicked(screen_pos: Vector2) -> void:
 	var hit := _pick_marker(screen_pos, pick_radius_px)
 	select(hit) # null clears
 	if hit and hit.data.has("event_id"):
-		var ev: EventData = %EventManager.get_event_by_id(hit.data["event_id"])
+		var ev: EventData = Game.event_manager.get_event_by_id(hit.data["event_id"])
 		if ev:
 			event_marker_clicked.emit(ev)
 	elif hit and hit.data.has("is_hq"):

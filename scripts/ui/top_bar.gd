@@ -12,7 +12,7 @@ extends PanelContainer
 
 ## Captured once at startup so speed presets are relative to whatever
 ## GameClock's own default is, rather than hardcoding it a second time here.
-@onready var _base_seconds_per_day: float = %GameClock.seconds_per_day
+@onready var _base_seconds_per_day: float = Game.game_clock.seconds_per_day
 
 const _SPEED_BUTTONS := [
 	{"name": "Speed1x", "multiplier": 1.0},
@@ -30,9 +30,9 @@ func _ready() -> void:
 	_fill_style.corner_radius_bottom_left = 3
 	_concealment_bar.add_theme_stylebox_override("fill", _fill_style)
 
-	_pause_button.pressed.connect(func() -> void: %GameClock.toggle_pause())
-	%GameClock.pause_changed.connect(_on_pause_changed)
-	%GameClock.day_advanced.connect(_update_date)
+	_pause_button.pressed.connect(func() -> void: Game.game_clock.toggle_pause())
+	Game.game_clock.pause_changed.connect(_on_pause_changed)
+	Game.game_clock.day_advanced.connect(_update_date)
 
 	var speed_group := ButtonGroup.new()
 	for entry in _SPEED_BUTTONS:
@@ -41,18 +41,18 @@ func _ready() -> void:
 		btn.button_group = speed_group
 		var multiplier: float = entry.multiplier
 		btn.button_pressed = is_equal_approx(multiplier, 1.0)
-		btn.pressed.connect(func() -> void: %GameClock.set_speed(_base_seconds_per_day / multiplier))
+		btn.pressed.connect(func() -> void: Game.game_clock.set_speed(_base_seconds_per_day / multiplier))
 
-	%ResourceState.funding_changed.connect(_on_funding_changed)
-	%ResourceState.intel_changed.connect(_on_intel_changed)
-	%ConcealmentState.concealment_changed.connect(_on_concealment_changed)
-	%ConcealmentState.threshold_crossed.connect(_on_threshold_crossed)
+	Game.resource_state.funding_changed.connect(_on_funding_changed)
+	Game.resource_state.intel_changed.connect(_on_intel_changed)
+	Game.concealment_state.concealment_changed.connect(_on_concealment_changed)
+	Game.concealment_state.threshold_crossed.connect(_on_threshold_crossed)
 
 	_update_date()
-	_on_pause_changed(%GameClock.paused)
-	_on_funding_changed(%ResourceState.funding, 0)
-	_on_intel_changed(%ResourceState.intel, 0)
-	_on_concealment_changed(%ConcealmentState.value, 0.0)
+	_on_pause_changed(Game.game_clock.paused)
+	_on_funding_changed(Game.resource_state.funding, 0)
+	_on_intel_changed(Game.resource_state.intel, 0)
+	_on_concealment_changed(Game.concealment_state.value, 0.0)
 
 
 func _update_date() -> void:

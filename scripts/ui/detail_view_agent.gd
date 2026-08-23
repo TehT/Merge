@@ -22,7 +22,7 @@ func populate(agent: AgentData) -> void:
 	_add_info_row("Level", "%d" % agent.level)
 	_add_info_row("XP", "%d" % agent.experience)
 
-	var team: TeamData = %TeamManager.get_team_of_agent(agent.id)
+	var team: TeamData = Game.team_manager.get_team_of_agent(agent.id)
 	if team:
 		add_child(HSeparator.new())
 		_add_info_row("Team", team.team_name)
@@ -74,6 +74,6 @@ func _add_clickable_prof_rank(prof_key: String, rank: int, color: Color, agent: 
 
 	row.gui_input.connect(func(ev: InputEvent) -> void:
 		if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
-			%SkillSlideout.show_proficiency(agent, prof_key))
+			Game.slideout_panel.show_proficiency(agent, prof_key))
 
 	add_child(row)

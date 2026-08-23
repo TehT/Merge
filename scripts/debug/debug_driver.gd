@@ -22,23 +22,23 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 
 	match event.keycode:
-		KEY_1: %EventManager.spawn_random_event()
+		KEY_1: Game.event_manager.spawn_random_event()
 		KEY_2: _list_events()
 		KEY_3: _deploy_first_team_to_most_urgent()
-		KEY_4: %GameClock.advance_days(1)
-		KEY_5: %GameClock.advance_days(7)
-		KEY_H: %GameClock.advance_hours(1)
+		KEY_4: Game.game_clock.advance_days(1)
+		KEY_5: Game.game_clock.advance_days(7)
+		KEY_H: Game.game_clock.advance_hours(1)
 		KEY_6:
-			%GameClock.toggle_pause()
-			print("[Debug] paused=%s" % [%GameClock.paused])
-		KEY_7: %AgentManager.print_roster_status()
+			Game.game_clock.toggle_pause()
+			print("[Debug] paused=%s" % [Game.game_clock.paused])
+		KEY_7: Game.agent_manager.print_roster_status()
 		KEY_8: _print_resources()
 		KEY_9: _print_full_status()
-		KEY_0: %TeamManager.print_team_status()
+		KEY_0: Game.team_manager.print_team_status()
 		KEY_T: _train_first_team()
 
 func _list_events() -> void:
-	var events: Array[EventData] = %EventManager.get_active_events()
+	var events: Array[EventData] = Game.event_manager.get_active_events()
 	if events.is_empty():
 		print("[Debug] no active events")
 		return
@@ -50,12 +50,12 @@ func _list_events() -> void:
 		])
 
 func _deploy_first_team_to_most_urgent() -> void:
-	var events: Array[EventData] = %EventManager.get_active_events()
+	var events: Array[EventData] = Game.event_manager.get_active_events()
 	if events.is_empty():
 		print("[Debug] no active events")
 		return
 
-	var teams: Array[TeamData] = %TeamManager.teams
+	var teams: Array[TeamData] = Game.team_manager.teams
 	if teams.is_empty():
 		print("[Debug] no teams exist")
 		return
@@ -64,7 +64,7 @@ func _deploy_first_team_to_most_urgent() -> void:
 	events.sort_custom(func(a: EventData, b: EventData): return a.urgency > b.urgency)
 	var event: EventData = events[0]
 
-	var plan: Dictionary = %EventManager.deploy_team(event.id, team.id)
+	var plan: Dictionary = Game.event_manager.deploy_team(event.id, team.id)
 	if plan.is_empty():
 		print("[Debug] deploy failed (team or event not found)")
 		return
@@ -74,25 +74,25 @@ func _deploy_first_team_to_most_urgent() -> void:
 	])
 
 func _train_first_team() -> void:
-	var teams: Array[TeamData] = %TeamManager.teams
+	var teams: Array[TeamData] = Game.team_manager.teams
 	if teams.is_empty():
 		print("[Debug] no teams exist")
 		return
 	var team := teams[0]
-	var started: bool = %TeamManager.start_training(team.id)
+	var started: bool = Game.team_manager.start_training(team.id)
 	if not started:
 		print("[Debug] %s can't start training right now (already training, or a member isn't Available)" % team.team_name)
 
 func _print_resources() -> void:
 	print("[Debug] concealment=%.1f funding=%d intel=%d" % [
-		%ConcealmentState.value, %ResourceState.funding, %ResourceState.intel,
+		Game.concealment_state.value, Game.resource_state.funding, Game.resource_state.intel,
 	])
 
 func _print_full_status() -> void:
 	_list_events()
-	%AgentManager.print_roster_status()
-	%TeamManager.print_team_status()
+	Game.agent_manager.print_roster_status()
+	Game.team_manager.print_team_status()
 	print("[Debug] concealment=%.1f funding=%d intel=%d magic_intensity=%.2f day=%d" % [
-		%ConcealmentState.value, %ResourceState.funding, %ResourceState.intel,
-		%EventManager.magic_intensity, %GameClock.current_day,
+		Game.concealment_state.value, Game.resource_state.funding, Game.resource_state.intel,
+		Game.event_manager.magic_intensity, Game.game_clock.current_day,
 	])

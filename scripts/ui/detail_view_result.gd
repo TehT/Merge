@@ -41,7 +41,7 @@ func populate_mission_result(team_name: String, ev_title: String, result: Dictio
 	_add_section("Agent Outcomes")
 	var agent_results: Dictionary = result.agent_results
 	for agent_id: String in agent_results:
-		var a: AgentData = %AgentManager.get_agent_by_id(agent_id)
+		var a: AgentData = Game.agent_manager.get_agent_by_id(agent_id)
 		var status: AgentData.Status = agent_results[agent_id]
 		var agent_name := a.agent_name if a else agent_id
 		var row := HBoxContainer.new()

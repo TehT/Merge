@@ -20,15 +20,16 @@ func populate(team: TeamData) -> void:
 	_add_info_row("Cohesion", "%.0f%%" % team.cohesion)
 
 	if team.is_traveling:
-		var hours_left := maxf(0.0, (team.travel_arrival_day - %GameClock.get_current_time_days()) * 24.0)
+		var hours_left := maxf(0.0, (team.travel_arrival_day - Game.game_clock.get_current_time_days()) * 24.0)
 		_add_info_row("Location", "En route to %s" % team.travel_destination_name)
 		_add_info_row("ETA", VehicleData.format_duration(hours_left))
 	else:
 		_add_info_row("Location", team.location_name)
 
-	var days_left: int = %TeamManager.get_training_days_left(team.id)
-	if days_left > 0:
-		_add_info_row("Training", "%d days left" % days_left)
+	if team.is_training:
+		var days_left: int = Game.team_manager.get_training_days_left(team.id)
+		if days_left > 0:
+			_add_info_row("Training", "%d days left" % days_left)
 
 	var members := _get_team_members(team)
 
@@ -48,7 +49,7 @@ func populate(team: TeamData) -> void:
 func _get_team_members(team: TeamData) -> Array[AgentData]:
 	var members: Array[AgentData] = []
 	for agent_id in team.member_ids:
-		var a: AgentData = %AgentManager.get_agent_by_id(agent_id)
+		var a: AgentData = Game.agent_manager.get_agent_by_id(agent_id)
 		if a != null:
 			members.append(a)
 	return members
@@ -58,4 +59,4 @@ func _rename_team(team: TeamData, new_name: String) -> void:
 	var trimmed := new_name.strip_edges()
 	if trimmed == "" or trimmed == team.team_name:
 		return
-	%TeamManager.rename_team(team.id, trimmed)
+	Game.team_manager.rename_team(team.id, trimmed)

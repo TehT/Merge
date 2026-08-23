@@ -122,7 +122,7 @@ func _ready() -> void:
 
 	# Prime day_of_year from GameClock before the first _process_sun() frame
 	# so get_date_string() isn't wrong for a frame at startup.
-	day_of_year = fmod(start_day_of_year + %GameClock.current_day + %GameClock.get_day_progress(), 365.25)
+	day_of_year = fmod(start_day_of_year + Game.game_clock.current_day + Game.game_clock.get_day_progress(), 365.25)
 
 	_current_distance = camera.position.length()
 	_target_distance = _current_distance
@@ -198,8 +198,8 @@ func _process_camera(delta: float) -> void:
 ## Future candidate: SunController
 func _process_sun(_delta: float) -> void:
 	if sun_advance_enabled:
-		_sun_angle = %GameClock.get_day_progress() * TAU
-		day_of_year = fmod(start_day_of_year + %GameClock.current_day + %GameClock.get_day_progress(), 365.25)
+		_sun_angle = Game.game_clock.get_day_progress() * TAU
+		day_of_year = fmod(start_day_of_year + Game.game_clock.current_day + Game.game_clock.get_day_progress(), 365.25)
 
 	if not _material:
 		return
@@ -525,8 +525,8 @@ func set_date(month: int, day: int) -> void:
 	for m in range(month - 1):
 		ordinal += _DAYS_IN_MONTH[m]
 	var target := fmod(ordinal - _MARCH_EQUINOX_ORDINAL + 365.25, 365.25)
-	start_day_of_year = fmod(target - %GameClock.current_day + 365.25, 365.25)
-	day_of_year = fmod(start_day_of_year + %GameClock.current_day + %GameClock.get_day_progress(), 365.25)
+	start_day_of_year = fmod(target - Game.game_clock.current_day + 365.25, 365.25)
+	day_of_year = fmod(start_day_of_year + Game.game_clock.current_day + Game.game_clock.get_day_progress(), 365.25)
 
 func get_date_string() -> String:
 	var ordinal := int(round(fmod(day_of_year + _MARCH_EQUINOX_ORDINAL, 365.25)))
@@ -542,7 +542,7 @@ func get_date_string() -> String:
 ## cycles have elapsed since start_day_of_year (used by get_date_string();
 ## the top bar reads that rather than tracking the calendar itself).
 func get_current_year() -> int:
-	var total_days: float = start_day_of_year + %GameClock.current_day + %GameClock.get_day_progress()
+	var total_days: float = start_day_of_year + Game.game_clock.current_day + Game.game_clock.get_day_progress()
 	return start_year + int(floor(total_days / 365.25))
 
 

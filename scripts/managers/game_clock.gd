@@ -1,6 +1,8 @@
 extends Node
-## GameClock — a persistent node in Main.tscn, referenced elsewhere via its
-## scene-unique name (%GameClock). The single global source of truth for
+class_name GameClock
+## GameClock — a persistent node in Main.tscn, referenced elsewhere via
+## Game.game_clock (registers itself in _ready() — see game.gd for why
+## that's used instead of %GameClock). The single global source of truth for
 ## in-game time. Gameplay systems (EventManager, ConcealmentState) hook
 ## day_advanced; GeoscapeController syncs its sun rotation and calendar
 ## (day_of_year) from get_day_progress()/current_day instead of running
@@ -31,6 +33,9 @@ var paused: bool = false
 ## Seconds accumulated within the *current hour* (not the whole day —
 ## ticking hourly means this only ever needs to fill one hour's worth).
 var _accum: float = 0.0
+
+func _ready() -> void:
+	Game.game_clock = self
 
 func _process(delta: float) -> void:
 	if paused:

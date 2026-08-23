@@ -25,10 +25,10 @@ var _paths: Dictionary = {} # team_id -> {line: MeshInstance3D, dot: MeshInstanc
 
 
 func _ready() -> void:
-	%TeamManager.team_departed.connect(_on_team_departed)
-	%TeamManager.team_arrived.connect(_on_team_arrived)
+	Game.team_manager.team_departed.connect(_on_team_departed)
+	Game.team_manager.team_arrived.connect(_on_team_arrived)
 
-	for team: TeamData in %TeamManager.teams:
+	for team: TeamData in Game.team_manager.teams:
 		if team.is_traveling:
 			_ensure_path(team.id)
 
@@ -38,7 +38,7 @@ func _on_team_departed(team_id: String) -> void:
 
 
 func _on_team_arrived(team_id: String, _event_id: String) -> void:
-	var team: TeamData = %TeamManager.get_team(team_id)
+	var team: TeamData = Game.team_manager.get_team(team_id)
 	if team and team.is_traveling:
 		return # immediately started another leg (e.g. the return trip) - keep showing it
 	_remove_path(team_id)
@@ -89,7 +89,7 @@ func _process(_delta: float) -> void:
 		flatten = geoscape.get_flatten_amount()
 
 	for team_id: String in _paths.keys():
-		var team: TeamData = %TeamManager.get_team(team_id)
+		var team: TeamData = Game.team_manager.get_team(team_id)
 		if team == null or not team.is_traveling:
 			_remove_path(team_id)
 			continue
@@ -101,7 +101,7 @@ func _update_path(team: TeamData, entry: Dictionary) -> void:
 	var dest: Vector2 = team.travel_destination  # (lon, lat)
 
 	var total_days := maxf(0.001, team.travel_arrival_day - team.travel_departure_day)
-	var now: float = %GameClock.get_current_time_days()
+	var now: float = Game.game_clock.get_current_time_days()
 	var elapsed := now - team.travel_departure_day
 	var progress := clampf(elapsed / total_days, 0.0, 1.0)
 

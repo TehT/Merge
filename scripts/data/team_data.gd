@@ -33,6 +33,7 @@ var location_name: String = ""
 ## (GameClock.get_current_time_days()), not whole day indices — travel
 ## resolves at hour precision, not on day-tick boundaries.
 var is_traveling: bool = false
+var is_training: bool = false
 var travel_destination: Vector2 = Vector2.ZERO
 var travel_destination_name: String = ""
 var travel_departure_day: float = 0.0

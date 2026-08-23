@@ -1,7 +1,11 @@
 extends PanelContainer
-## SlideoutPanel — secondary pop-out panel loader. Owns the panel chrome
-## (styling, scroll area) and which content type is active; the actual
-## content-building for each type lives in its own script
+class_name SlideoutPanel
+## SlideoutPanel — secondary pop-out panel loader, referenced elsewhere
+## via Game.slideout_panel (registers itself in _ready() — see game.gd;
+## used instead of %SkillSlideout for the same dynamically-created-node
+## reason detail_sidebar.gd uses Game.detail_sidebar). Owns the panel
+## chrome (styling, scroll area) and which content type is active; the
+## actual content-building for each type lives in its own script
 ## (slideout_view_*.gd) so this file stays a thin dispatcher. Doubles as a
 ## drill-down for proficiency skills (clicking a proficiency bar), the
 ## squad picker for deploying a team to an event (clicking "Deploy Team"),
@@ -22,6 +26,7 @@ var _active_vehicle: VehicleData
 
 
 func _ready() -> void:
+	Game.slideout_panel = self
 	visible = false
 	custom_minimum_size.x = 260
 

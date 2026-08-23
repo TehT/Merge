@@ -1,10 +1,12 @@
 extends Node
+class_name TeamManager
 ## TeamManager — a persistent node in Main.tscn, referenced elsewhere via
-## its scene-unique name (%TeamManager). Owns the player's teams (3-5
-## agents each) and their cohesion. Must be listed AFTER AgentManager as a
-## sibling in Main.tscn: the starting team is built from %AgentManager's
-## roster in _ready(), which requires AgentManager's own _ready() (where
-## the roster is populated) to have already run.
+## Game.team_manager (registers itself in _ready() — see game.gd). Owns
+## the player's teams (3-5 agents each) and their cohesion. Must be listed
+## AFTER AgentManager as a sibling in Main.tscn: the starting team is
+## built from Game.agent_manager's roster in _ready(), which requires
+## AgentManager's own _ready() (where the roster is populated, and where
+## it registers itself into Game) to have already run.
 
 signal team_created(team: TeamData)
 signal cohesion_changed(team_id: String, new_value: float, delta: float)
@@ -38,7 +40,8 @@ var teams: Array[TeamData] = []
 var _training: Dictionary = {}
 
 func _ready() -> void:
-	%GameClock.day_advanced.connect(_on_day_advanced)
+	Game.team_manager = self
+	Game.game_clock.day_advanced.connect(_on_day_advanced)
 	var starting := _create_starting_team()
 	if starting:
 		teams.append(starting)
@@ -49,7 +52,7 @@ func _ready() -> void:
 ## revisit if the starting roster size ever changes.
 func _create_starting_team() -> TeamData:
 	var ids: Array[String] = []
-	for a in %AgentManager.roster:
+	for a in Game.agent_manager.roster:
 		ids.append(a.id)
 	if ids.size() < TeamData.MIN_SIZE:
 		push_warning("[TeamManager] starting roster too small to form a team.")
@@ -73,7 +76,7 @@ func _on_day_advanced(_day: int) -> void:
 func _process(_delta: float) -> void:
 	if teams.is_empty():
 		return
-	var now: float = %GameClock.get_current_time_days()
+	var now: float = Game.game_clock.get_current_time_days()
 	for team in teams:
 		if team.is_traveling and now >= team.travel_arrival_day:
 			_complete_travel(team)
@@ -120,7 +123,7 @@ func begin_travel(team_id: String, destination: Vector2, destination_name: Strin
 		return {}
 
 	var hours := vehicle.compute_travel_hours(distance)
-	var now: float = %GameClock.get_current_time_days()
+	var now: float = Game.game_clock.get_current_time_days()
 
 	# Remember where they set out from so begin_return_travel() knows where
 	# "home" is once the mission concludes, without hardcoding HQ (matters
@@ -138,9 +141,9 @@ func begin_travel(team_id: String, destination: Vector2, destination_name: Strin
 	team.travel_vehicle_name = vehicle.vehicle_name
 
 	for agent_id in team.member_ids:
-		var a: AgentData = %AgentManager.get_agent_by_id(agent_id)
+		var a: AgentData = Game.agent_manager.get_agent_by_id(agent_id)
 		if a != null and a.is_available():
-			%AgentManager.set_status(agent_id, AgentData.Status.DEPLOYED)
+			Game.agent_manager.set_status(agent_id, AgentData.Status.DEPLOYED)
 
 	team_departed.emit(team_id)
 	print("[TeamManager] %s departed for %s via %s (%.0f km, %s)" % [
@@ -166,7 +169,7 @@ func begin_return_travel(team_id: String) -> void:
 			team.travel_return_to.y, team.travel_return_to.x)
 	var vehicle := get_best_vehicle(distance, team.member_ids.size())
 	var hours := vehicle.compute_travel_hours(distance) if vehicle else 24.0
-	var now: float = %GameClock.get_current_time_days()
+	var now: float = Game.game_clock.get_current_time_days()
 
 	team.is_traveling = true
 	team.travel_destination = team.travel_return_to
@@ -191,7 +194,7 @@ func _complete_travel(team: TeamData) -> void:
 	if team.travel_is_return:
 		team.travel_is_return = false
 		for agent_id: String in team.pending_agent_results:
-			%AgentManager.set_status(agent_id, team.pending_agent_results[agent_id])
+			Game.agent_manager.set_status(agent_id, team.pending_agent_results[agent_id])
 		team.pending_agent_results.clear()
 		print("[TeamManager] %s returned to %s" % [team.team_name, team.location_name])
 		team_arrived.emit(team.id, "") # empty event_id = "just a return, nothing to resolve"
@@ -315,12 +318,12 @@ func start_training(team_id: String) -> bool:
 	if team == null or _training.has(team_id):
 		return false
 	for agent_id in team.member_ids:
-		var a: AgentData = %AgentManager.get_agent_by_id(agent_id)
+		var a: AgentData = Game.agent_manager.get_agent_by_id(agent_id)
 		if a == null or not a.is_available():
 			return false
 
 	for agent_id in team.member_ids:
-		%AgentManager.set_status(agent_id, AgentData.Status.TRAINING)
+		Game.agent_manager.set_status(agent_id, AgentData.Status.TRAINING)
 	_training[team_id] = training_days
 	training_started.emit(team_id)
 	print("[TeamManager] %s began training (%d days)" % [team.team_name, training_days])
@@ -332,7 +335,7 @@ func _finish_training(team_id: String) -> void:
 	if team == null:
 		return
 	for agent_id in team.member_ids:
-		%AgentManager.set_status(agent_id, AgentData.Status.AVAILABLE)
+		Game.agent_manager.set_status(agent_id, AgentData.Status.AVAILABLE)
 	_set_cohesion(team, team.cohesion + training_cohesion_gain)
 	training_completed.emit(team_id)
 	print("[TeamManager] %s finished training (cohesion now %.1f)" % [team.team_name, team.cohesion])

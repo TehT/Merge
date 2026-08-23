@@ -1,7 +1,9 @@
 extends Node
+class_name AgentManager
 ## AgentManager — a persistent node in Main.tscn, referenced elsewhere via
-## its scene-unique name (%AgentManager). Owns the player's agent roster:
-## the starting 4 agents, status transitions, and lookup helpers.
+## Game.agent_manager (registers itself in _ready() — see game.gd). Owns
+## the player's agent roster: the starting 4 agents, status transitions,
+## and lookup helpers.
 
 signal roster_changed()
 signal agent_status_changed(agent_id: String, old_status: AgentData.Status, new_status: AgentData.Status)
@@ -9,6 +11,7 @@ signal agent_status_changed(agent_id: String, old_status: AgentData.Status, new_
 @export var roster: Array[AgentData] = []
 
 func _ready() -> void:
+	Game.agent_manager = self
 	roster = _create_starting_roster()
 	print("[AgentManager] roster initialized with %d agents" % roster.size())
 

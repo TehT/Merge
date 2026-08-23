@@ -16,14 +16,14 @@ var _new_squad_btn: Button
 
 func _ready() -> void:
 	add_theme_constant_override("separation", 6)
-	%AgentManager.roster_changed.connect(_refresh)
-	%AgentManager.agent_status_changed.connect(_on_agent_status_changed)
-	%TeamManager.team_created.connect(_on_team_changed)
-	%TeamManager.cohesion_changed.connect(_on_cohesion_changed)
-	%TeamManager.training_started.connect(_on_team_changed)
-	%TeamManager.training_completed.connect(_on_team_changed)
-	%TeamManager.membership_changed.connect(_on_membership_changed)
-	%TeamManager.team_renamed.connect(_on_team_changed)
+	Game.agent_manager.roster_changed.connect(_refresh)
+	Game.agent_manager.agent_status_changed.connect(_on_agent_status_changed)
+	Game.team_manager.team_created.connect(_on_team_changed)
+	Game.team_manager.cohesion_changed.connect(_on_cohesion_changed)
+	Game.team_manager.training_started.connect(_on_team_changed)
+	Game.team_manager.training_completed.connect(_on_team_changed)
+	Game.team_manager.membership_changed.connect(_on_membership_changed)
+	Game.team_manager.team_renamed.connect(_on_team_changed)
 	_new_squad_btn = _make_new_squad_button()
 	get_parent().get_parent().add_child.call_deferred(_new_squad_btn)
 	_refresh()
@@ -46,7 +46,7 @@ func _refresh() -> void:
 	for child in get_children():
 		child.queue_free()
 
-	var roster: Array[AgentData] = %AgentManager.roster
+	var roster: Array[AgentData] = Game.agent_manager.roster
 	if roster.is_empty():
 		var empty_label := Label.new()
 		empty_label.text = "No agents."
@@ -56,7 +56,7 @@ func _refresh() -> void:
 	var by_team: Dictionary = {}
 	var unassigned: Array[AgentData] = []
 	for agent in roster:
-		var team: TeamData = %TeamManager.get_team_of_agent(agent.id)
+		var team: TeamData = Game.team_manager.get_team_of_agent(agent.id)
 		if team == null:
 			unassigned.append(agent)
 			continue
@@ -65,13 +65,13 @@ func _refresh() -> void:
 			by_team[team.id] = empty
 		by_team[team.id].append(agent)
 
-	var teams: Array[TeamData] = %TeamManager.teams
+	var teams: Array[TeamData] = Game.team_manager.teams
 	for team in teams:
 		var members: Array[AgentData] = []
 		if by_team.has(team.id):
 			members = by_team[team.id]
 		var title := "%s — Cohesion %.0f%%" % [team.team_name, team.cohesion]
-		var days_left: int = %TeamManager.get_training_days_left(team.id)
+		var days_left: int = Game.team_manager.get_training_days_left(team.id)
 		if days_left > 0:
 			title += "  (training, %dd left)" % days_left
 		add_child(_make_group(team.id, title, members))
@@ -94,7 +94,7 @@ func _make_new_squad_button() -> Control:
 func _on_new_squad_pressed() -> void:
 	var team_name := "Squad %d" % _next_team_number
 	_next_team_number += 1
-	%TeamManager.create_empty_team(team_name)
+	Game.team_manager.create_empty_team(team_name)
 
 
 func _make_group(key: String, title: String, members: Array[AgentData]) -> Control:
@@ -125,7 +125,7 @@ func _make_group(key: String, title: String, members: Array[AgentData]) -> Contr
 		team_btn.mouse_filter = Control.MOUSE_FILTER_PASS
 		header_row.add_child(team_btn)
 
-		var team: TeamData = %TeamManager.get_team(key)
+		var team: TeamData = Game.team_manager.get_team(key)
 		if team:
 			team_btn.pressed.connect(func() -> void:
 				team_selected.emit(team))
@@ -269,14 +269,14 @@ func _can_drop_agent(_at_pos: Vector2, data: Variant, target_key: String) -> boo
 	if agent_id == "":
 		return false
 
-	var current_team: TeamData = %TeamManager.get_team_of_agent(agent_id)
+	var current_team: TeamData = Game.team_manager.get_team_of_agent(agent_id)
 
 	if target_key == "unassigned":
 		return current_team != null
 	else:
 		if current_team and current_team.id == target_key:
 			return false
-		var team: TeamData = %TeamManager.get_team(target_key)
+		var team: TeamData = Game.team_manager.get_team(target_key)
 		return team != null and team.member_ids.size() < TeamData.MAX_SIZE
 
 
@@ -295,17 +295,17 @@ func _on_agent_dropped(_at_pos: Vector2, data: Variant, target_key: String) -> v
 
 
 func _move_agent(agent_id: String, target_key: String) -> void:
-	var current_team: TeamData = %TeamManager.get_team_of_agent(agent_id)
+	var current_team: TeamData = Game.team_manager.get_team_of_agent(agent_id)
 
 	if target_key == "unassigned":
 		if current_team:
-			%TeamManager.remove_member(current_team.id, agent_id)
+			Game.team_manager.remove_member(current_team.id, agent_id)
 	else:
 		if current_team:
 			if current_team.id == target_key:
 				return
-			%TeamManager.remove_member(current_team.id, agent_id)
-		%TeamManager.add_member(target_key, agent_id)
+			Game.team_manager.remove_member(current_team.id, agent_id)
+		Game.team_manager.add_member(target_key, agent_id)
 
 
 func _status_color(status: AgentData.Status) -> Color:

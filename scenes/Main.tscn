@@ -16,9 +16,9 @@
 [ext_resource type="Theme" uid="uid://bvs1oeej2kgvg" path="res://theme/ui_theme.tres" id="13_uitheme"]
 [ext_resource type="Script" uid="uid://dglngvv1scups" path="res://scripts/ui/top_bar.gd" id="14_topbar"]
 [ext_resource type="Script" uid="uid://d1a4kuru82rac" path="res://scripts/ui/root_ui.gd" id="15_rootui"]
-[ext_resource type="Script" path="res://scripts/ui/detail_sidebar.gd" id="16_detailpanel"]
+[ext_resource type="Script" uid="uid://0e1m87kygusj" path="res://scripts/ui/detail_sidebar.gd" id="16_detailpanel"]
 [ext_resource type="Script" uid="uid://bemolojavpkub" path="res://scripts/ui/events_tab.gd" id="17_eventstab"]
-[ext_resource type="Script" path="res://scripts/ui/slideout_panel.gd" id="18_skillslideout"]
+[ext_resource type="Script" uid="uid://d3sowmtwnncfn" path="res://scripts/ui/slideout_panel.gd" id="18_skillslideout"]
 [ext_resource type="Script" uid="uid://dgvq56yx673qk" path="res://scripts/ui/event_map_labels.gd" id="19_eventmaplabels"]
 [ext_resource type="Script" uid="uid://bsq774q1vd22" path="res://scripts/travel_path_layer.gd" id="20_travelpathlayer"]
 

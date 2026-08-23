@@ -1,6 +1,8 @@
 extends Node
+class_name ConcealmentState
 ## ConcealmentState — a persistent node in Main.tscn, referenced elsewhere
-## via its scene-unique name (%ConcealmentState). The central tension
+## via Game.concealment_state (registers itself in _ready() — see
+## game.gd). The central tension
 ## meter, 0 (perfectly hidden) to 100 (full public knowledge). Failed/
 ## expired events add concealment; successful containment reduces it; it
 ## passively decays each day. Crossing 25/50/75 fires escalation hooks
@@ -18,7 +20,8 @@ const THRESHOLDS := [25, 50, 75, 100]
 var value: float = 0.0
 
 func _ready() -> void:
-	%GameClock.day_advanced.connect(_on_day_advanced)
+	Game.concealment_state = self
+	Game.game_clock.day_advanced.connect(_on_day_advanced)
 
 func _on_day_advanced(_day: int) -> void:
 	reduce(daily_decay)

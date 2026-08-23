@@ -1,8 +1,10 @@
 extends Node
+class_name EventManager
 ## EventManager — a persistent node in Main.tscn, referenced elsewhere via
-## its scene-unique name (%EventManager). Spawns EventData instances at
-## real city locations, ticks their timers on each game day, handles
-## expiration (concealment + escalation), and resolves deployed missions.
+## Game.event_manager (registers itself in _ready() — see game.gd).
+## Spawns EventData instances at real city locations, ticks their timers
+## on each game day, handles expiration (concealment + escalation), and
+## resolves deployed missions.
 
 signal event_spawned(event: EventData)
 signal event_expired(event: EventData)
@@ -15,7 +17,7 @@ var magic_intensity: float = 1.0
 @export var magic_intensity_growth_per_day: float = 0.02
 @export var base_spawn_chance_per_day: float = 0.35
 
-@onready var _geo_data: GeoData = %GeoData as GeoData
+@onready var _geo_data: GeoData = Game.geo_data
 
 ## Template "reqs" order: [combat, subterfuge, attunement, erudition, influence, ingenuity]
 ## Values are base proficiency ranks (0-5 early game). Scaled up by magic_intensity.
@@ -42,8 +44,9 @@ const _ESCALATION_TEMPLATES: Array[Dictionary] = [
 ]
 
 func _ready() -> void:
-	%GameClock.day_advanced.connect(_on_day_advanced)
-	%TeamManager.team_arrived.connect(_on_team_arrived)
+	Game.event_manager = self
+	Game.game_clock.day_advanced.connect(_on_day_advanced)
+	Game.team_manager.team_arrived.connect(_on_team_arrived)
 
 func _on_day_advanced(_day: int) -> void:
 	magic_intensity += magic_intensity_growth_per_day
@@ -102,7 +105,7 @@ func _tick_active_events() -> void:
 
 func _handle_expiration(event: EventData) -> void:
 	event.status = EventData.Status.EXPIRED
-	%ConcealmentState.add(event.concealment_on_fail)
+	Game.concealment_state.add(event.concealment_on_fail)
 	active_events.erase(event)
 	event_expired.emit(event)
 	push_warning("[EventManager] %s expired unresolved (+%.1f concealment)" % [
@@ -139,12 +142,12 @@ func deploy_team(event_id: String, team_id: String, vehicle_override: VehicleDat
 	var event := get_event_by_id(event_id)
 	if event == null:
 		return {}
-	var team: TeamData = %TeamManager.get_team(team_id)
+	var team: TeamData = Game.team_manager.get_team(team_id)
 	if team == null:
 		push_warning("[EventManager] no such team: %s" % team_id)
 		return {}
 
-	var plan: Dictionary = %TeamManager.begin_travel(
+	var plan: Dictionary = Game.team_manager.begin_travel(
 			team_id, event.geo_coordinates, event.location_city, event_id, vehicle_override)
 	if plan.is_empty():
 		return {}
@@ -159,25 +162,25 @@ func _on_team_arrived(team_id: String, event_id: String) -> void:
 	var event := get_event_by_id(event_id)
 	if event == null:
 		return
-	var team: TeamData = %TeamManager.get_team(team_id)
+	var team: TeamData = Game.team_manager.get_team(team_id)
 	if team == null:
 		return
 
 	var members: Array[AgentData] = []
 	for agent_id in team.member_ids:
-		var a: AgentData = %AgentManager.get_agent_by_id(agent_id)
+		var a: AgentData = Game.agent_manager.get_agent_by_id(agent_id)
 		if a != null and a.status == AgentData.Status.DEPLOYED:
 			members.append(a)
 
 	var result := MissionResolver.resolve(event, members, team)
 	result["team_name"] = team.team_name
 	_apply_resolution(event, result)
-	%TeamManager.grant_mission_cohesion(team_id)
+	Game.team_manager.grant_mission_cohesion(team_id)
 
 	# Agents keep their DEPLOYED status until the team is physically back —
 	# their real outcome (available/injured/KIA) applies on the return leg.
 	team.pending_agent_results = result.agent_results.duplicate()
-	%TeamManager.begin_return_travel(team_id)
+	Game.team_manager.begin_return_travel(team_id)
 
 	event_resolved.emit(event, result)
 	print("[EventManager] %s resolved %s -> %s (suitability=%.2f chance=%.2f roll=%.2f)" % [
@@ -189,14 +192,14 @@ func resolve_event_solo(event_id: String, agent_id: String) -> Dictionary:
 	if event == null:
 		return {}
 
-	var agent: AgentData = %AgentManager.get_agent_by_id(agent_id)
+	var agent: AgentData = Game.agent_manager.get_agent_by_id(agent_id)
 	if agent == null or not agent.is_available():
 		return {}
 
 	var result := MissionResolver.resolve(event, [agent])
 	_apply_resolution(event, result)
 	for aid: String in result.agent_results:
-		%AgentManager.set_status(aid, result.agent_results[aid])
+		Game.agent_manager.set_status(aid, result.agent_results[aid])
 
 	event_resolved.emit(event, result)
 	print("[EventManager] %s resolved %s solo -> %s (suitability=%.2f chance=%.2f roll=%.2f)" % [
@@ -207,17 +210,17 @@ func resolve_event_solo(event_id: String, agent_id: String) -> Dictionary:
 func _apply_resolution(event: EventData, result: Dictionary) -> void:
 	match result.outcome:
 		"success":
-			%ResourceState.earn_funding(event.reward_funding)
-			%ResourceState.earn_intel(event.reward_intel)
-			%ConcealmentState.add(event.concealment_on_success)
+			Game.resource_state.earn_funding(event.reward_funding)
+			Game.resource_state.earn_intel(event.reward_intel)
+			Game.concealment_state.add(event.concealment_on_success)
 			event.status = EventData.Status.RESOLVED_SUCCESS
 		"partial":
-			%ResourceState.earn_funding(int(event.reward_funding * 0.5))
-			%ResourceState.earn_intel(int(event.reward_intel * 0.5))
-			%ConcealmentState.add(event.concealment_on_partial)
+			Game.resource_state.earn_funding(int(event.reward_funding * 0.5))
+			Game.resource_state.earn_intel(int(event.reward_intel * 0.5))
+			Game.concealment_state.add(event.concealment_on_partial)
 			event.status = EventData.Status.RESOLVED_PARTIAL
 		_:
-			%ConcealmentState.add(event.concealment_on_fail)
+			Game.concealment_state.add(event.concealment_on_fail)
 			event.status = EventData.Status.RESOLVED_FAIL
 
 	event.resolution_roll = result.roll

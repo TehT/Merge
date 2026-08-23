@@ -9,10 +9,10 @@ var _selected_event_id: String = ""
 
 func _ready() -> void:
 	add_theme_constant_override("separation", 6)
-	%EventManager.event_spawned.connect(func(_e: EventData) -> void: _refresh())
-	%EventManager.event_expired.connect(func(_e: EventData) -> void: _refresh())
-	%EventManager.event_resolved.connect(func(_e: EventData, _r: Dictionary) -> void: _refresh())
-	%GameClock.day_advanced.connect(func(_d: int) -> void: _refresh())
+	Game.event_manager.event_spawned.connect(func(_e: EventData) -> void: _refresh())
+	Game.event_manager.event_expired.connect(func(_e: EventData) -> void: _refresh())
+	Game.event_manager.event_resolved.connect(func(_e: EventData, _r: Dictionary) -> void: _refresh())
+	Game.game_clock.day_advanced.connect(func(_d: int) -> void: _refresh())
 	_refresh()
 
 
@@ -20,7 +20,7 @@ func _refresh() -> void:
 	for child in get_children():
 		child.queue_free()
 
-	var events: Array[EventData] = %EventManager.get_active_events()
+	var events: Array[EventData] = Game.event_manager.get_active_events()
 	if events.is_empty():
 		var empty := Label.new()
 		empty.text = "No active events."

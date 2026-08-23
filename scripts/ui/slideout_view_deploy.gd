@@ -19,7 +19,7 @@ func populate(ev: EventData, on_close: Callable) -> void:
 
 	add_child(HSeparator.new())
 
-	var teams: Array[TeamData] = %TeamManager.teams
+	var teams: Array[TeamData] = Game.team_manager.teams
 	var deployable := teams.filter(func(t: TeamData) -> bool: return not t.member_ids.is_empty())
 
 	if deployable.is_empty():
@@ -37,7 +37,7 @@ func populate(ev: EventData, on_close: Callable) -> void:
 func _get_available_team_members(team: TeamData) -> Array[AgentData]:
 	var members: Array[AgentData] = []
 	for agent_id in team.member_ids:
-		var a: AgentData = %AgentManager.get_agent_by_id(agent_id)
+		var a: AgentData = Game.agent_manager.get_agent_by_id(agent_id)
 		if a != null and a.is_available():
 			members.append(a)
 	return members
@@ -50,7 +50,7 @@ func _make_deploy_row(team: TeamData, on_close: Callable) -> Control:
 	var available := _get_available_team_members(team)
 	var distance := GeoData.haversine_km(team.location.y, team.location.x,
 			_event.geo_coordinates.y, _event.geo_coordinates.x)
-	var best_vehicle: VehicleData = %TeamManager.get_best_vehicle(distance, available.size())
+	var best_vehicle: VehicleData = Game.team_manager.get_best_vehicle(distance, available.size())
 	var in_range := best_vehicle != null
 	var can_deploy := not available.is_empty() and not team.is_traveling and in_range
 
@@ -60,7 +60,7 @@ func _make_deploy_row(team: TeamData, on_close: Callable) -> Control:
 	card.add_child(name_lbl)
 
 	if team.is_traveling:
-		var hours_left := maxf(0.0, (team.travel_arrival_day - %GameClock.get_current_time_days()) * 24.0)
+		var hours_left := maxf(0.0, (team.travel_arrival_day - Game.game_clock.get_current_time_days()) * 24.0)
 		var travel_lbl := Label.new()
 		travel_lbl.text = "En route to %s — %s left" % [
 			team.travel_destination_name, VehicleData.format_duration(hours_left)]
@@ -135,7 +135,7 @@ func _make_vehicle_dropdown(distance: float, team_size: int, default_vehicle: Ve
 	dropdown.focus_mode = Control.FOCUS_NONE
 	dropdown.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 
-	var fleet: Array[VehicleData] = %TeamManager.vehicles
+	var fleet: Array[VehicleData] = Game.team_manager.vehicles
 	var default_idx := 0
 	for i in range(fleet.size()):
 		var v: VehicleData = fleet[i]
@@ -181,8 +181,8 @@ func _on_deploy_pressed(team: TeamData, dropdown: OptionButton, on_close: Callab
 	var selected_vehicle: VehicleData = null
 	if dropdown:
 		selected_vehicle = dropdown.get_item_metadata(dropdown.get_selected())
-	var plan: Dictionary = %EventManager.deploy_team(_event.id, team.id, selected_vehicle)
+	var plan: Dictionary = Game.event_manager.deploy_team(_event.id, team.id, selected_vehicle)
 	if plan.is_empty():
 		return
 	on_close.call()
-	%DetailPanel.show_travel_confirmation(team_name, ev_title, plan)
+	Game.detail_sidebar.show_travel_confirmation(team_name, ev_title, plan)

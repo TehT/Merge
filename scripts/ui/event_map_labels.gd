@@ -12,9 +12,9 @@ var _labels: Dictionary = {} # event_id -> Button
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	%EventManager.event_spawned.connect(_on_event_spawned)
-	%EventManager.event_expired.connect(_on_event_expired)
-	%EventManager.event_resolved.connect(_on_event_resolved)
+	Game.event_manager.event_spawned.connect(_on_event_spawned)
+	Game.event_manager.event_expired.connect(_on_event_expired)
+	Game.event_manager.event_resolved.connect(_on_event_resolved)
 
 
 func _on_event_spawned(ev: EventData) -> void:
@@ -50,7 +50,7 @@ func _on_event_spawned(ev: EventData) -> void:
 
 
 func _on_label_pressed(event_id: String) -> void:
-	var ev: EventData = %EventManager.get_event_by_id(event_id)
+	var ev: EventData = Game.event_manager.get_event_by_id(event_id)
 	if ev == null:
 		return
 	event_label_clicked.emit(ev)

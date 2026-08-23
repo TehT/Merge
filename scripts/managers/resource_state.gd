@@ -1,9 +1,10 @@
 extends Node
+class_name ResourceState
 ## ResourceState — a persistent node in Main.tscn, referenced elsewhere via
-## its scene-unique name (%ResourceState). Tracks the player's Funding and
-## Intel economy. Kept separate from ConcealmentState: this is a simple
-## ledger, while concealment is a threshold-driven meter with its own
-## growing set of concerns.
+## Game.resource_state (registers itself in _ready() — see game.gd).
+## Tracks the player's Funding and Intel economy. Kept separate from
+## ConcealmentState: this is a simple ledger, while concealment is a
+## threshold-driven meter with its own growing set of concerns.
 
 signal funding_changed(new_value: int, delta: int)
 signal intel_changed(new_value: int, delta: int)
@@ -15,6 +16,7 @@ var funding: int = 0
 var intel: int = 0
 
 func _ready() -> void:
+	Game.resource_state = self
 	funding = starting_funding
 	intel = starting_intel
 

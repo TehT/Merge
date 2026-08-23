@@ -123,6 +123,6 @@ func _make_deploy_team_row(ev: EventData) -> Control:
 
 	row.gui_input.connect(func(input_event: InputEvent) -> void:
 		if input_event is InputEventMouseButton and input_event.pressed and input_event.button_index == MOUSE_BUTTON_LEFT:
-			%SkillSlideout.show_deploy_teams(ev))
+			Game.slideout_panel.show_deploy_teams(ev))
 
 	return row
