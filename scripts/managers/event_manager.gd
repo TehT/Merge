@@ -30,28 +30,25 @@ var magic_intensity: float = 1.0
 
 @onready var _geo_data: GeoData = Game.geo_data
 
-## Template "reqs" order: [combat, subterfuge, attunement, erudition, influence, ingenuity]
-## Values are base proficiency ranks (0-5 early game). Scaled up by magic_intensity.
-const _SPAWN_TEMPLATES: Array[Dictionary] = [
-	{"type": EventData.EventType.CRYPTID_SIGHTING, "urgency": EventData.Urgency.LOW,
-		"reqs": [1, 2, 0, 0, 0, 0], "days": 4, "can_escalate": false},
-	{"type": EventData.EventType.MAGICAL_SURGE, "urgency": EventData.Urgency.MEDIUM,
-		"reqs": [0, 0, 2, 1, 0, 1], "days": 3, "can_escalate": true,
-		"escalates_to": EventData.EventType.PORTAL_BREACH},
-	{"type": EventData.EventType.ARTIFACT_ACTIVATION, "urgency": EventData.Urgency.MEDIUM,
-		"reqs": [0, 1, 1, 1, 0, 2], "days": 3, "can_escalate": false},
-	{"type": EventData.EventType.CULT_ACTIVITY, "urgency": EventData.Urgency.HIGH,
-		"reqs": [2, 1, 0, 0, 2, 0], "days": 3, "can_escalate": true,
-		"escalates_to": EventData.EventType.PORTAL_BREACH},
-	{"type": EventData.EventType.HAUNTING, "urgency": EventData.Urgency.LOW,
-		"reqs": [0, 1, 2, 0, 0, 0], "days": 4, "can_escalate": false},
-	{"type": EventData.EventType.FAIRY_INCURSION, "urgency": EventData.Urgency.MEDIUM,
-		"reqs": [1, 0, 1, 1, 2, 0], "days": 3, "can_escalate": false},
+## Spawn pool, loaded from saved EventData resources (see
+## res://data/event_templates/) — each one a base profile (type, urgency,
+## proficiency requirements, time limit, escalation) that spawn_random_event()
+## duplicates and fills in with a fresh id/location. Adding or rebalancing
+## an event type is a .tres edit, not a code change.
+var spawn_templates: Array[EventData] = [
+	preload("res://data/event_templates/cryptid_sighting.tres"),
+	preload("res://data/event_templates/magical_surge.tres"),
+	preload("res://data/event_templates/artifact_activation.tres"),
+	preload("res://data/event_templates/cult_activity.tres"),
+	preload("res://data/event_templates/haunting.tres"),
+	preload("res://data/event_templates/fairy_incursion.tres"),
 ]
 
-const _ESCALATION_TEMPLATES: Array[Dictionary] = [
-	{"type": EventData.EventType.PORTAL_BREACH, "urgency": EventData.Urgency.HIGH,
-		"reqs": [1, 1, 3, 1, 0, 2], "days": 3, "can_escalate": false},
+## Escalation-only profiles — not part of the random spawn pool, only
+## reached via _spawn_escalation() looking up an expiring event's
+## escalates_to type.
+var escalation_templates: Array[EventData] = [
+	preload("res://data/event_templates/portal_breach.tres"),
 ]
 
 func _ready() -> void:
@@ -71,28 +68,23 @@ func _maybe_spawn_event() -> void:
 	if randf() < chance:
 		spawn_random_event()
 
-func spawn_random_event(template_override: Dictionary = {}) -> EventData:
-	var tmpl: Dictionary = template_override if not template_override.is_empty() \
-		else _SPAWN_TEMPLATES[randi() % _SPAWN_TEMPLATES.size()]
+func spawn_random_event(template_override: EventData = null) -> EventData:
+	var tmpl: EventData = template_override if template_override != null \
+		else spawn_templates[randi() % spawn_templates.size()]
 
-	var event := EventData.new()
-	event.setup(_title_for(tmpl.type), tmpl.type, tmpl.urgency)
+	## duplicate(true) so this spawn gets its own copies of the template's
+	## arrays (tags, decision options, ...) rather than sharing them with
+	## every other event spawned from the same template.
+	var event: EventData = tmpl.duplicate(true)
+	event.setup(tmpl.get_type_name(), tmpl.event_type, tmpl.urgency)
 
 	var bonus: int = int(magic_intensity - 1.0)
-	var r: Array = tmpl.reqs
-	event.set_proficiency_profile(
-		mini(r[0] + bonus, 10) if r[0] > 0 else 0,
-		mini(r[1] + bonus, 10) if r[1] > 0 else 0,
-		mini(r[2] + bonus, 10) if r[2] > 0 else 0,
-		mini(r[3] + bonus, 10) if r[3] > 0 else 0,
-		mini(r[4] + bonus, 10) if r[4] > 0 else 0,
-		mini(r[5] + bonus, 10) if r[5] > 0 else 0)
-	event.time_limit_days = tmpl.days
-	event.days_remaining = tmpl.days
-	event.can_escalate = tmpl.get("can_escalate", false)
-	if event.can_escalate:
-		event.escalates_to = tmpl.escalates_to
-		event.escalation_rank_bump = 1
+	event.req_combat = mini(event.req_combat + bonus, 10) if event.req_combat > 0 else 0
+	event.req_subterfuge = mini(event.req_subterfuge + bonus, 10) if event.req_subterfuge > 0 else 0
+	event.req_attunement = mini(event.req_attunement + bonus, 10) if event.req_attunement > 0 else 0
+	event.req_erudition = mini(event.req_erudition + bonus, 10) if event.req_erudition > 0 else 0
+	event.req_influence = mini(event.req_influence + bonus, 10) if event.req_influence > 0 else 0
+	event.req_ingenuity = mini(event.req_ingenuity + bonus, 10) if event.req_ingenuity > 0 else 0
 
 	var city: Variant = _geo_data.get_random_city(50000) if _geo_data else null
 	if city:
@@ -249,16 +241,11 @@ func get_event_by_id(event_id: String) -> EventData:
 			return e
 	return null
 
-func _title_for(event_type: EventData.EventType) -> String:
-	var stub := EventData.new()
-	stub.event_type = event_type
-	return stub.get_type_name()
-
-func _find_template_for_type(event_type: EventData.EventType) -> Dictionary:
-	for tmpl in _SPAWN_TEMPLATES:
-		if tmpl.type == event_type:
+func _find_template_for_type(event_type: EventData.EventType) -> EventData:
+	for tmpl: EventData in spawn_templates:
+		if tmpl.event_type == event_type:
 			return tmpl
-	for tmpl in _ESCALATION_TEMPLATES:
-		if tmpl.type == event_type:
+	for tmpl: EventData in escalation_templates:
+		if tmpl.event_type == event_type:
 			return tmpl
-	return _SPAWN_TEMPLATES[0]
+	return spawn_templates[0]

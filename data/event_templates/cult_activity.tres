@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="EventData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/event_data.gd" id="1_evtdata"]
+
+[resource]
+script = ExtResource("1_evtdata")
+event_type = 4
+urgency = 2
+time_limit_days = 3
+req_combat = 2
+req_subterfuge = 1
+req_influence = 2
+can_escalate = true
+escalates_to = 3
+escalation_rank_bump = 1
