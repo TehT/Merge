@@ -7,15 +7,14 @@ extends "res://scripts/ui/detail_view_base.gd"
 ## empty state, which lives on the loader, so it's passed in as a callable
 ## rather than this view knowing about DetailSidebar directly.
 
-func populate_mission_result(team_name: String, ev_title: String, result: Dictionary, on_close: Callable) -> void:
-	var outcome: String = result.outcome
+func populate_mission_result(team_name: String, ev_title: String, result: MissionResolutionResult, on_close: Callable) -> void:
 	var outcome_color: Color
 	var outcome_text: String
-	match outcome:
-		"success":
+	match result.outcome:
+		MissionResolutionResult.Outcome.SUCCESS:
 			outcome_color = Color(0.4, 0.8, 0.45, 1.0)
 			outcome_text = "Success"
-		"partial":
+		MissionResolutionResult.Outcome.PARTIAL:
 			outcome_color = Color(0.85, 0.7, 0.2, 1.0)
 			outcome_text = "Partial Success"
 		_:

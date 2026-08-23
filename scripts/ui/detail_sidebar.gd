@@ -103,11 +103,11 @@ func show_hq() -> void:
 ## days after the player clicked Deploy and long after they've moved on to
 ## something else — so the report pops up on its own rather than only
 ## showing right after a Deploy click.
-func _on_mission_resolved(ev: EventData, result: Dictionary) -> void:
-	show_mission_result(result.get("team_name", "Squad"), ev.title, result)
+func _on_mission_resolved(ev: EventData, team_name: String, result: MissionResolutionResult) -> void:
+	show_mission_result(team_name, ev.title, result)
 
 
-func show_mission_result(team_name: String, ev_title: String, result: Dictionary) -> void:
+func show_mission_result(team_name: String, ev_title: String, result: MissionResolutionResult) -> void:
 	_view = _View.RESULT
 	_clear()
 	var view: VBoxContainer = DetailViewResult.new()

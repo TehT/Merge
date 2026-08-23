@@ -9,13 +9,20 @@ class_name EventManager
 signal event_spawned(event: EventData)
 signal event_expired(event: EventData)
 signal event_escalated(old_event: EventData, new_event: EventData)
-signal event_resolved(event: EventData, result: Dictionary)
+signal event_resolved(event: EventData, team_name: String, result: MissionResolutionResult)
 
 var active_events: Array[EventData] = []
 
 var magic_intensity: float = 1.0
 @export var magic_intensity_growth_per_day: float = 0.02
 @export var base_spawn_chance_per_day: float = 0.35
+
+## The "black box" mission resolver — Strategy pattern (see
+## scripts/managers/resolution/). Swappable in the Inspector or at runtime
+## (e.g. Game.event_manager.resolution_strategy = GauntletResolutionStrategy.new())
+## without touching any of the spawn/travel/arrival logic below. Defaults
+## to the original single stat-roll behavior if left unassigned.
+@export var resolution_strategy: MissionResolutionStrategy
 
 @onready var _geo_data: GeoData = Game.geo_data
 
@@ -45,6 +52,8 @@ const _ESCALATION_TEMPLATES: Array[Dictionary] = [
 
 func _ready() -> void:
 	Game.event_manager = self
+	if resolution_strategy == null:
+		resolution_strategy = StatCheckResolutionStrategy.new()
 	Game.game_clock.day_advanced.connect(_on_day_advanced)
 	Game.team_manager.team_arrived.connect(_on_team_arrived)
 
@@ -172,8 +181,7 @@ func _on_team_arrived(team_id: String, event_id: String) -> void:
 		if a != null and a.status == AgentData.Status.DEPLOYED:
 			members.append(a)
 
-	var result := MissionResolver.resolve(event, members, team)
-	result["team_name"] = team.team_name
+	var result := resolution_strategy.resolve(event, members)
 	_apply_resolution(event, result)
 	Game.team_manager.grant_mission_cohesion(team_id)
 
@@ -182,39 +190,41 @@ func _on_team_arrived(team_id: String, event_id: String) -> void:
 	team.pending_agent_results = result.agent_results.duplicate()
 	Game.team_manager.begin_return_travel(team_id)
 
-	event_resolved.emit(event, result)
+	event_resolved.emit(event, team.team_name, result)
 	print("[EventManager] %s resolved %s -> %s (suitability=%.2f chance=%.2f roll=%.2f)" % [
-		team.team_name, event.title, result.outcome, result.team_suitability, result.chance, result.roll,
+		team.team_name, event.title, MissionResolutionResult.outcome_name(result.outcome),
+		result.team_suitability, result.chance, result.roll,
 	])
 
-func resolve_event_solo(event_id: String, agent_id: String) -> Dictionary:
+func resolve_event_solo(event_id: String, agent_id: String) -> MissionResolutionResult:
 	var event := get_event_by_id(event_id)
 	if event == null:
-		return {}
+		return null
 
 	var agent: AgentData = Game.agent_manager.get_agent_by_id(agent_id)
 	if agent == null or not agent.is_available():
-		return {}
+		return null
 
-	var result := MissionResolver.resolve(event, [agent])
+	var result := resolution_strategy.resolve(event, [agent])
 	_apply_resolution(event, result)
 	for aid: String in result.agent_results:
 		Game.agent_manager.set_status(aid, result.agent_results[aid])
 
-	event_resolved.emit(event, result)
+	event_resolved.emit(event, agent.agent_name, result)
 	print("[EventManager] %s resolved %s solo -> %s (suitability=%.2f chance=%.2f roll=%.2f)" % [
-		agent.agent_name, event.title, result.outcome, result.team_suitability, result.chance, result.roll,
+		agent.agent_name, event.title, MissionResolutionResult.outcome_name(result.outcome),
+		result.team_suitability, result.chance, result.roll,
 	])
 	return result
 
-func _apply_resolution(event: EventData, result: Dictionary) -> void:
+func _apply_resolution(event: EventData, result: MissionResolutionResult) -> void:
 	match result.outcome:
-		"success":
+		MissionResolutionResult.Outcome.SUCCESS:
 			Game.resource_state.earn_funding(event.reward_funding)
 			Game.resource_state.earn_intel(event.reward_intel)
 			Game.concealment_state.add(event.concealment_on_success)
 			event.status = EventData.Status.RESOLVED_SUCCESS
-		"partial":
+		MissionResolutionResult.Outcome.PARTIAL:
 			Game.resource_state.earn_funding(int(event.reward_funding * 0.5))
 			Game.resource_state.earn_intel(int(event.reward_intel * 0.5))
 			Game.concealment_state.add(event.concealment_on_partial)

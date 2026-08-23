@@ -114,7 +114,7 @@ func _on_event_expired(event: EventData) -> void:
 	_remove_event_marker(event.id)
 
 
-func _on_event_resolved(event: EventData, _result: Dictionary) -> void:
+func _on_event_resolved(event: EventData, _team_name: String, _result: MissionResolutionResult) -> void:
 	_remove_event_marker(event.id)
 
 

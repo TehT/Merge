@@ -60,7 +60,7 @@ func _on_event_expired(ev: EventData) -> void:
 	_remove_label(ev.id)
 
 
-func _on_event_resolved(ev: EventData, _result: Dictionary) -> void:
+func _on_event_resolved(ev: EventData, _team_name: String, _result: MissionResolutionResult) -> void:
 	_remove_label(ev.id)
 
 
