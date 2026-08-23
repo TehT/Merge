@@ -1,0 +1,51 @@
+[gd_resource type="ShaderMaterial" format=3 uid="uid://dm2ujobtbh6y6"]
+
+[ext_resource type="Shader" uid="uid://cdgfr4q5ekttl" path="res://shaders/geoscape.gdshader" id="1_r327v"]
+[ext_resource type="Texture2D" uid="uid://dro4khvw5n242" path="res://textures/heightmap_2048x1024.png" id="2_kl45h"]
+[ext_resource type="Texture2D" uid="uid://dl2e6o58w2t01" path="res://textures/land_mask.png" id="3_3gloh"]
+[ext_resource type="Texture2D" uid="uid://eyik8osyfk1b" path="res://textures/land_mask_10m_2048.png" id="4_pxfcb"]
+[ext_resource type="Texture2D" uid="uid://dpqlvlaqtng66" path="res://textures/lights_mask2.png" id="5_joso7"]
+[ext_resource type="Texture2D" uid="uid://dyjsaaebjmj44" path="res://textures/satellite_map_4096.png" id="6_r327v"]
+[ext_resource type="Texture2D" uid="uid://bwllc8okb2xep" path="res://textures/moisture_map_4096.png" id="6_y4nmk"]
+
+[resource]
+render_priority = 0
+shader = ExtResource("1_r327v")
+shader_parameter/detail_mode = false
+shader_parameter/land_mask = ExtResource("3_3gloh")
+shader_parameter/land_mask_detailed = ExtResource("4_pxfcb")
+shader_parameter/lights_mask = ExtResource("5_joso7")
+shader_parameter/heightmap = ExtResource("2_kl45h")
+shader_parameter/satellite_map = ExtResource("6_r327v")
+shader_parameter/moisture_map = ExtResource("6_y4nmk")
+shader_parameter/height_scale = 0.03
+shader_parameter/hillshade_strength = 0.5
+shader_parameter/sea_color_day = Color(0.05, 0.18, 0.35, 1)
+shader_parameter/sea_color_night = Color(0.01, 0.03, 0.08, 1)
+shader_parameter/land_color_day = Color(0.16, 0.42, 0.18, 1)
+shader_parameter/land_color_night = Color(0.03, 0.08, 0.04, 1)
+shader_parameter/city_light_color = Color(1, 0.82, 0.45, 1)
+shader_parameter/city_light_intensity = 0.9
+shader_parameter/terminator_glow_color = Color(0.9, 0.55, 0.15, 1)
+shader_parameter/terminator_width = 0.015
+shader_parameter/sun_direction = Vector3(1, 0, 0)
+shader_parameter/enable_night = true
+shader_parameter/flatten = 0.0
+shader_parameter/show_graticule = true
+shader_parameter/graticule_step_deg = 15.0
+shader_parameter/graticule_width = 0.006
+shader_parameter/graticule_color = Color(0.2, 0.5, 0.3, 1)
+shader_parameter/graticule_alpha = 0.25
+shader_parameter/hovered_cell = Vector2(-999, -999)
+shader_parameter/highlight_color = Color(0.3, 0.8, 1, 1)
+shader_parameter/highlight_alpha = 0.2
+shader_parameter/cell_uv_min = Vector2(0, 0)
+shader_parameter/cell_uv_max = Vector2(1, 1)
+shader_parameter/border_color = Color(0.3, 0.8, 1, 1)
+shader_parameter/border_width = 0.015
+shader_parameter/weather_time = 0.0
+shader_parameter/wind_direction = Vector2(1, 0.2)
+shader_parameter/wind_speed = 0.3
+shader_parameter/cloud_coverage = 0.5
+shader_parameter/cloud_opacity = 0.55
+shader_parameter/season = 0.0

@@ -1,0 +1,367 @@
+[gd_scene format=3 uid="uid://dav4lb66f3xvf"]
+
+[ext_resource type="Script" uid="uid://ceo0iwrvvu57t" path="res://scripts/GeoscapeController.gd" id="1"]
+[ext_resource type="Material" uid="uid://dm2ujobtbh6y6" path="res://materials/geoscape_material.tres" id="2"]
+[ext_resource type="Script" uid="uid://b7qbvm2gc4stk" path="res://scripts/GeoData.gd" id="2_vcsgt"]
+[ext_resource type="Script" uid="uid://1yhhbyhfvtyh" path="res://scripts/MarkerLayer.gd" id="3_0bbpv"]
+[ext_resource type="Script" uid="uid://belv085q36hey" path="res://scripts/WeatherController.gd" id="4_rarhs"]
+[ext_resource type="Script" uid="uid://dw8aense1sjk4" path="res://scripts/debug/debug_driver.gd" id="5_debugdriver"]
+[ext_resource type="Script" uid="uid://dhu583nqo1jvy" path="res://scripts/managers/game_clock.gd" id="6_gameclock"]
+[ext_resource type="Script" uid="uid://cfxphxhasvlky" path="res://scripts/managers/resource_state.gd" id="7_resourcestate"]
+[ext_resource type="Script" uid="uid://bfpc84oqgk7aw" path="res://scripts/managers/concealment_state.gd" id="8_concealmentstate"]
+[ext_resource type="Script" uid="uid://cq2wc21b23uy0" path="res://scripts/managers/agent_manager.gd" id="9_agentmanager"]
+[ext_resource type="Script" uid="uid://edkbsd6c330g" path="res://scripts/managers/event_manager.gd" id="10_eventmanager"]
+[ext_resource type="Script" uid="uid://bqim33p8183g3" path="res://scripts/ui/agent_tab.gd" id="11_agenttab"]
+[ext_resource type="Script" uid="uid://cmn5k3mn1d2ww" path="res://scripts/managers/team_manager.gd" id="12_teammanager"]
+[ext_resource type="Theme" uid="uid://bvs1oeej2kgvg" path="res://theme/ui_theme.tres" id="13_uitheme"]
+[ext_resource type="Script" uid="uid://dglngvv1scups" path="res://scripts/ui/top_bar.gd" id="14_topbar"]
+[ext_resource type="Script" uid="uid://d1a4kuru82rac" path="res://scripts/ui/root_ui.gd" id="15_rootui"]
+[ext_resource type="Script" uid="uid://duckotolrohtj" path="res://scripts/ui/detail_panel.gd" id="16_detailpanel"]
+[ext_resource type="Script" uid="uid://bemolojavpkub" path="res://scripts/ui/events_tab.gd" id="17_eventstab"]
+[ext_resource type="Script" uid="uid://qkx3tkumhqxy" path="res://scripts/ui/skill_slideout.gd" id="18_skillslideout"]
+[ext_resource type="Script" uid="uid://dgvq56yx673qk" path="res://scripts/ui/event_map_labels.gd" id="19_eventmaplabels"]
+[ext_resource type="Script" uid="uid://bsq774q1vd22" path="res://scripts/travel_path_layer.gd" id="20_travelpathlayer"]
+
+[sub_resource type="Environment" id="Environment_1"]
+background_mode = 2
+background_color = Color(0.01, 0.01, 0.02, 1)
+ambient_light_source = 2
+ambient_light_color = Color(1, 1, 1, 1)
+glow_enabled = true
+glow_intensity = 0.6
+glow_bloom = 0.1
+
+[sub_resource type="SphereMesh" id="SphereMesh_1"]
+radius = 1.0
+height = 2.0
+
+[node name="Main" type="Node3D" unique_id=353230914 node_paths=PackedStringArray("geo")]
+script = ExtResource("1")
+axial_tilt_deg = 24.0
+show_night_shade = false
+start_day_of_year = 246.36
+geo = NodePath("GeoData")
+
+[node name="GeoData" type="Node" parent="." unique_id=356167534]
+unique_name_in_owner = true
+script = ExtResource("2_vcsgt")
+
+[node name="WeatherController" type="Node" parent="." unique_id=936297188]
+script = ExtResource("4_rarhs")
+wind_speed = 9.0
+wind_angle_degrees = 80.0
+cloud_coverage = 1.2
+cloud_opacity = 0.7
+
+[node name="DebugDriver" type="Node" parent="." unique_id=1772128435]
+script = ExtResource("5_debugdriver")
+
+[node name="GameClock" type="Node" parent="." unique_id=422667358]
+unique_name_in_owner = true
+script = ExtResource("6_gameclock")
+
+[node name="ResourceState" type="Node" parent="." unique_id=1751736826]
+unique_name_in_owner = true
+script = ExtResource("7_resourcestate")
+
+[node name="ConcealmentState" type="Node" parent="." unique_id=1065680669]
+unique_name_in_owner = true
+script = ExtResource("8_concealmentstate")
+
+[node name="AgentManager" type="Node" parent="." unique_id=1178527809]
+unique_name_in_owner = true
+script = ExtResource("9_agentmanager")
+
+[node name="TeamManager" type="Node" parent="." unique_id=1533351038]
+unique_name_in_owner = true
+script = ExtResource("12_teammanager")
+
+[node name="EventManager" type="Node" parent="." unique_id=388966121]
+unique_name_in_owner = true
+script = ExtResource("10_eventmanager")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=1588015448]
+environment = SubResource("Environment_1")
+
+[node name="Globe" type="MeshInstance3D" parent="." unique_id=1471761661]
+mesh = SubResource("SphereMesh_1")
+surface_material_override/0 = ExtResource("2")
+
+[node name="MarkerLayer" type="Node3D" parent="Globe" unique_id=1719960321]
+unique_name_in_owner = true
+script = ExtResource("3_0bbpv")
+
+[node name="TravelPathLayer" type="Node3D" parent="Globe" unique_id=2057643536]
+script = ExtResource("20_travelpathlayer")
+
+[node name="Camera3D" type="Camera3D" parent="." unique_id=2051545007]
+unique_name_in_owner = true
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.06703663, 0, -10.51023)
+current = true
+fov = 50.0
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="." unique_id=744412009]
+transform = Transform3D(0.5, 0, 0.866025, 0, 1, 0, -0.866025, 0, 0.5, 3, 2, 0)
+visible = false
+light_energy = 0.0
+
+[node name="UI" type="CanvasLayer" parent="." unique_id=229570375]
+
+[node name="Root" type="Control" parent="UI" unique_id=1786420762]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme = ExtResource("13_uitheme")
+script = ExtResource("15_rootui")
+
+[node name="TopBar" type="PanelContainer" parent="UI/Root" unique_id=1686084005]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_bottom = 40.0
+grow_horizontal = 2
+script = ExtResource("14_topbar")
+
+[node name="HBox" type="HBoxContainer" parent="UI/Root/TopBar" unique_id=220787760]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="DateLabel" type="Label" parent="UI/Root/TopBar/HBox" unique_id=2127481014]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Jan 1, 2025"
+vertical_alignment = 1
+
+[node name="PauseButton" type="Button" parent="UI/Root/TopBar/HBox" unique_id=1403550169]
+unique_name_in_owner = true
+layout_mode = 2
+focus_mode = 0
+text = "⏸"
+
+[node name="SpeedButtons" type="HBoxContainer" parent="UI/Root/TopBar/HBox" unique_id=1016150574]
+layout_mode = 2
+
+[node name="Speed1x" type="Button" parent="UI/Root/TopBar/HBox/SpeedButtons" unique_id=1529365081]
+layout_mode = 2
+focus_mode = 0
+text = "1x"
+
+[node name="Speed2x" type="Button" parent="UI/Root/TopBar/HBox/SpeedButtons" unique_id=1407233323]
+layout_mode = 2
+focus_mode = 0
+text = "2x"
+
+[node name="Speed4x" type="Button" parent="UI/Root/TopBar/HBox/SpeedButtons" unique_id=645863086]
+layout_mode = 2
+focus_mode = 0
+text = "4x"
+
+[node name="Sep1" type="VSeparator" parent="UI/Root/TopBar/HBox" unique_id=24520601]
+layout_mode = 2
+
+[node name="FundingLabel" type="Label" parent="UI/Root/TopBar/HBox" unique_id=181943697]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Funding 500"
+vertical_alignment = 1
+
+[node name="IntelLabel" type="Label" parent="UI/Root/TopBar/HBox" unique_id=1405367133]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Intel 20"
+vertical_alignment = 1
+
+[node name="Sep2" type="VSeparator" parent="UI/Root/TopBar/HBox" unique_id=1435951430]
+layout_mode = 2
+
+[node name="ConcealmentSection" type="HBoxContainer" parent="UI/Root/TopBar/HBox" unique_id=297557655]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 8
+
+[node name="ConcealmentTitle" type="Label" parent="UI/Root/TopBar/HBox/ConcealmentSection" unique_id=1592513810]
+layout_mode = 2
+text = "Concealment"
+vertical_alignment = 1
+
+[node name="ConcealmentBarWrap" type="Control" parent="UI/Root/TopBar/HBox/ConcealmentSection" unique_id=762379266]
+custom_minimum_size = Vector2(120, 18)
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+
+[node name="ConcealmentBar" type="ProgressBar" parent="UI/Root/TopBar/HBox/ConcealmentSection/ConcealmentBarWrap" unique_id=489477907]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+show_percentage = false
+
+[node name="Tick25" type="ColorRect" parent="UI/Root/TopBar/HBox/ConcealmentSection/ConcealmentBarWrap" unique_id=1964998404]
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 0.25
+anchor_right = 0.25
+anchor_bottom = 1.0
+offset_left = -1.0
+offset_right = 1.0
+mouse_filter = 2
+color = Color(0, 0, 0, 0.5)
+
+[node name="Tick50" type="ColorRect" parent="UI/Root/TopBar/HBox/ConcealmentSection/ConcealmentBarWrap" unique_id=1953001239]
+layout_mode = 1
+anchors_preset = 13
+anchor_left = 0.5
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -1.0
+offset_right = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0, 0, 0, 0.5)
+
+[node name="Tick75" type="ColorRect" parent="UI/Root/TopBar/HBox/ConcealmentSection/ConcealmentBarWrap" unique_id=934352303]
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 0.75
+anchor_right = 0.75
+anchor_bottom = 1.0
+offset_left = -1.0
+offset_right = 1.0
+mouse_filter = 2
+color = Color(0, 0, 0, 0.5)
+
+[node name="ConcealmentLabel" type="Label" parent="UI/Root/TopBar/HBox/ConcealmentSection" unique_id=1030717105]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(40, 0)
+layout_mode = 2
+text = "0%"
+vertical_alignment = 1
+
+[node name="EventMapLabels" type="Control" parent="UI/Root" unique_id=1965322047]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("19_eventmaplabels")
+
+[node name="SkillSlideout" type="PanelContainer" parent="UI/Root" unique_id=1965322046]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 9
+anchor_bottom = 1.0
+offset_top = 56.0
+offset_bottom = -8.0
+grow_vertical = 2
+script = ExtResource("18_skillslideout")
+
+[node name="LeftSidebar" type="PanelContainer" parent="UI/Root" unique_id=689593108]
+layout_mode = 1
+anchors_preset = 9
+anchor_bottom = 1.0
+offset_left = -320.0
+offset_top = 48.0
+grow_vertical = 2
+
+[node name="LeftScroll" type="ScrollContainer" parent="UI/Root/LeftSidebar" unique_id=1937741878]
+layout_mode = 2
+horizontal_scroll_mode = 0
+
+[node name="DetailPanel" type="VBoxContainer" parent="UI/Root/LeftSidebar/LeftScroll" unique_id=1085952443]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+script = ExtResource("16_detailpanel")
+
+[node name="LeftToggle" type="Button" parent="UI/Root" unique_id=1973512330]
+layout_mode = 1
+offset_top = 48.0
+offset_right = 24.0
+offset_bottom = 80.0
+focus_mode = 0
+text = "▶"
+
+[node name="RightSidebar" type="PanelContainer" parent="UI/Root" unique_id=1659837075]
+layout_mode = 1
+anchors_preset = 11
+anchor_left = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -320.0
+offset_top = 48.0
+grow_horizontal = 0
+grow_vertical = 2
+
+[node name="Tabs" type="TabContainer" parent="UI/Root/RightSidebar" unique_id=1977334389]
+layout_mode = 2
+current_tab = 0
+
+[node name="Squads" type="VBoxContainer" parent="UI/Root/RightSidebar/Tabs" unique_id=1023984741]
+layout_mode = 2
+metadata/_tab_index = 0
+
+[node name="SquadScroll" type="ScrollContainer" parent="UI/Root/RightSidebar/Tabs/Squads" unique_id=34452012]
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="SquadList" type="VBoxContainer" parent="UI/Root/RightSidebar/Tabs/Squads/SquadScroll" unique_id=1559793329]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+script = ExtResource("11_agenttab")
+
+[node name="Events" type="ScrollContainer" parent="UI/Root/RightSidebar/Tabs" unique_id=734486557]
+visible = false
+layout_mode = 2
+horizontal_scroll_mode = 0
+metadata/_tab_index = 1
+
+[node name="EventList" type="VBoxContainer" parent="UI/Root/RightSidebar/Tabs/Events" unique_id=1791181196]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+script = ExtResource("17_eventstab")
+
+[node name="Research" type="ScrollContainer" parent="UI/Root/RightSidebar/Tabs" unique_id=813551765]
+visible = false
+layout_mode = 2
+metadata/_tab_index = 2
+
+[node name="ResearchPlaceholder" type="Label" parent="UI/Root/RightSidebar/Tabs/Research" unique_id=1840294243]
+layout_mode = 2
+text = "Research — coming soon"
+
+[node name="Equipment" type="ScrollContainer" parent="UI/Root/RightSidebar/Tabs" unique_id=795735576]
+visible = false
+layout_mode = 2
+metadata/_tab_index = 3
+
+[node name="EquipmentPlaceholder" type="Label" parent="UI/Root/RightSidebar/Tabs/Equipment" unique_id=1018624314]
+layout_mode = 2
+text = "Equipment — coming soon"
+
+[node name="RightToggle" type="Button" parent="UI/Root" unique_id=1985642592]
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -344.0
+offset_top = 48.0
+offset_right = -320.0
+offset_bottom = 80.0
+grow_horizontal = 0
+focus_mode = 0
+text = "▶"

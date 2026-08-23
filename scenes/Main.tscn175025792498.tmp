@@ -1,0 +1,51 @@
+[gd_scene format=3 uid="uid://dav4lb66f3xvf"]
+
+[ext_resource type="Script" uid="uid://ceo0iwrvvu57t" path="res://scripts/GeoscapeController.gd" id="1"]
+[ext_resource type="Material" path="res://textures/geoscape_material.tres" id="2"]
+[ext_resource type="Script" uid="uid://1yhhbyhfvtyh" path="res://scripts/MarkerLayer.gd" id="3_0bbpv"]
+
+[sub_resource type="Environment" id="Environment_1"]
+background_mode = 2
+background_color = Color(0.01, 0.01, 0.02, 1)
+ambient_light_source = 2
+ambient_light_color = Color(1, 1, 1, 1)
+glow_enabled = true
+glow_intensity = 0.6
+glow_bloom = 0.1
+
+[sub_resource type="SphereMesh" id="SphereMesh_1"]
+radius = 1.0
+height = 2.0
+
+[node name="Main" type="Node3D" unique_id=353230914 node_paths=PackedStringArray("date_label")]
+script = ExtResource("1")
+day_of_year = 353.126
+date_label = NodePath("Globe/CanvasLayer/Label")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=1588015448]
+environment = SubResource("Environment_1")
+
+[node name="Globe" type="MeshInstance3D" parent="." unique_id=1471761661]
+mesh = SubResource("SphereMesh_1")
+surface_material_override/0 = ExtResource("2")
+
+[node name="MarkerLayer" type="Node3D" parent="Globe" unique_id=1719960321]
+script = ExtResource("3_0bbpv")
+
+[node name="CanvasLayer" type="CanvasLayer" parent="Globe" unique_id=459102857]
+follow_viewport_enabled = true
+
+[node name="Label" type="Label" parent="Globe/CanvasLayer" unique_id=438870994]
+offset_right = 40.0
+offset_bottom = 23.0
+text = "TEST"
+
+[node name="Camera3D" type="Camera3D" parent="." unique_id=2051545007]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 3)
+current = true
+fov = 50.0
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="." unique_id=744412009]
+transform = Transform3D(0.5, 0, 0.866025, 0, 1, 0, -0.866025, 0, 0.5, 3, 2, 0)
+visible = false
+light_energy = 0.0

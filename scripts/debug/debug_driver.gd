@@ -1,0 +1,95 @@
+extends Node
+## DebugDriver — manual test harness for the Milestone 1 backend loop.
+## No UI exists yet, so this exposes the event/agent/team/resolution
+## systems via raw keycodes, matching GeoscapeController's existing input
+## pattern (which also checks event.keycode directly rather than using
+## InputMap).
+##
+## 1: spawn a random event now
+## 2: list active events
+## 3: send the first team traveling to the most urgent event (resolves on arrival)
+## 4: advance 1 day manually      5: advance 7 days manually
+## 6: toggle GameClock pause
+## 7: print full roster status
+## 8: print concealment/funding/intel
+## 9: print full status (events + roster + teams + resources)
+## 0: print team status (cohesion, members)
+## T: start training for the first team (requires all members Available)
+
+func _unhandled_input(event: InputEvent) -> void:
+	if not (event is InputEventKey and event.pressed and not event.echo):
+		return
+
+	match event.keycode:
+		KEY_1: %EventManager.spawn_random_event()
+		KEY_2: _list_events()
+		KEY_3: _deploy_first_team_to_most_urgent()
+		KEY_4: %GameClock.advance_days(1)
+		KEY_5: %GameClock.advance_days(7)
+		KEY_6:
+			%GameClock.toggle_pause()
+			print("[Debug] paused=%s" % [%GameClock.paused])
+		KEY_7: %AgentManager.print_roster_status()
+		KEY_8: _print_resources()
+		KEY_9: _print_full_status()
+		KEY_0: %TeamManager.print_team_status()
+		KEY_T: _train_first_team()
+
+func _list_events() -> void:
+	var events: Array[EventData] = %EventManager.get_active_events()
+	if events.is_empty():
+		print("[Debug] no active events")
+		return
+	print("[Debug] active events (%d):" % events.size())
+	for e in events:
+		print("  %s [%s/%s] days_left=%d loc=%s reqs=%s" % [
+			e.title, e.get_urgency_name(), e.get_type_name(),
+			e.days_remaining, e.location_city, e.get_skill_requirements(),
+		])
+
+func _deploy_first_team_to_most_urgent() -> void:
+	var events: Array[EventData] = %EventManager.get_active_events()
+	if events.is_empty():
+		print("[Debug] no active events")
+		return
+
+	var teams: Array[TeamData] = %TeamManager.teams
+	if teams.is_empty():
+		print("[Debug] no teams exist")
+		return
+	var team := teams[0]
+
+	events.sort_custom(func(a: EventData, b: EventData): return a.urgency > b.urgency)
+	var event: EventData = events[0]
+
+	var plan: Dictionary = %EventManager.deploy_team(event.id, team.id)
+	if plan.is_empty():
+		print("[Debug] deploy failed (team or event not found)")
+		return
+	print("[Debug] %s departed for %s: %.0f km, %d day(s), arriving day %d" % [
+		team.team_name, event.title, plan.distance_km, plan.travel_days, plan.arrival_day,
+	])
+
+func _train_first_team() -> void:
+	var teams: Array[TeamData] = %TeamManager.teams
+	if teams.is_empty():
+		print("[Debug] no teams exist")
+		return
+	var team := teams[0]
+	var started: bool = %TeamManager.start_training(team.id)
+	if not started:
+		print("[Debug] %s can't start training right now (already training, or a member isn't Available)" % team.team_name)
+
+func _print_resources() -> void:
+	print("[Debug] concealment=%.1f funding=%d intel=%d" % [
+		%ConcealmentState.value, %ResourceState.funding, %ResourceState.intel,
+	])
+
+func _print_full_status() -> void:
+	_list_events()
+	%AgentManager.print_roster_status()
+	%TeamManager.print_team_status()
+	print("[Debug] concealment=%.1f funding=%d intel=%d magic_intensity=%.2f day=%d" % [
+		%ConcealmentState.value, %ResourceState.funding, %ResourceState.intel,
+		%EventManager.magic_intensity, %GameClock.current_day,
+	])
