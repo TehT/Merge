@@ -3,7 +3,7 @@
 **Companion to `concurrence_gdd.md`.** That document owns the *vision*: premise, narrative arc, act structure, design principles. This document owns the *implementation*: what actually exists in the codebase today, how it fits together, the conventions to follow, and what to build next.
 
 **Engine:** Godot 4.7 (stable), GDScript, Forward+
-**Status as of this document:** Milestone 1 (core loop) is functionally complete and playable via UI. Travel, teams, and vehicles have been added beyond the original Milestone 1 scope.
+**Status as of this document:** Milestone 1 (core loop) is functionally complete and playable via UI. Well beyond original scope: travel now has three legs (travel / on-site mission / travel home), resolution is a swappable Strategy Pattern, skills and equipment are both fully data-driven Resource systems, agents are procedurally generated, and a `BaseManager` owns bases/vehicles/equipment ahead of real multi-base play.
 
 > ⚠️ **The original GDD is partly out of date.** See [§9 Divergences](#9-divergences-from-the-original-gdd) before treating it as spec.
 
@@ -28,36 +28,53 @@
 
 ## 1. Architecture Overview
 
-### The manager pattern
+### The manager pattern, and `Game` (the one autoload)
 
-All global game state lives in **plain `Node`s parented directly under `Main`**, each with `unique_name_in_owner = true`, accessed everywhere via scene-unique names (`%GameClock`, `%EventManager`, …).
+Every manager is still a plain `Node` parented directly under `Main` — **managers themselves are not autoloads.** The one exception is `Game` (`scripts/game.gd`), a thin **typed registry**, not a duplicate of any manager: it holds `var game_clock: GameClock`, `agent_manager`, `base_manager`, `team_manager`, `event_manager`, `resource_state`, `concealment_state`, `geo_data`, `detail_sidebar`, `slideout_panel` — nothing else. Each manager assigns itself into the matching `Game` field as the **first line of its own `_ready()`** (`Game.agent_manager = self`), so `Game.x` is only ever read after `x`'s own `_ready()` has run.
 
-**These are deliberately NOT autoloads.** A stale `[autoload]` block in `project.godot` was removed after it caused every manager to exist twice — once correctly under `Main`, once orphaned under `/root` where `%`-lookups can't resolve (autoloads aren't part of `Main`'s owned scene, so their `_ready()` threw on `%GameClock`). **Do not re-add them to `[autoload]`.**
+**Why this exists, replacing the earlier `%UniqueName` convention:** `%`-lookups resolve by walking a node's `owner` chain, which only works for nodes instantiated from a packed scene. Every dynamically-created UI view (`detail_view_*.gd`, `slideout_view_*.gd`, all built via `SomeControl.new()` + `add_child()`) never gets an `owner` assigned, so `%`-lookups from inside them silently fail. `Game.x` resolves by autoload identity instead, which works identically no matter how or where the calling code was created. `%UniqueName` still works fine from properly scene-owned scripts and is still used in a few places, but new code should prefer `Game.x`.
 
-Consequences of this choice:
-- Sibling order in `Main.tscn` matters where one manager reads another during `_ready()`. `TeamManager` must come after `AgentManager` (it builds the starting team from the roster).
-- By the time *any* node's `_ready()` runs, the whole tree exists — so `%`-lookups inside `_ready()` are always safe regardless of order. Only *reading another manager's initialized data* is order-sensitive.
+Consequences:
+- Sibling order in `Main.tscn` still matters for cross-manager reads during `_ready()` — `AgentManager` before `BaseManager` before `TeamManager` (the starting team is built from the roster and placed at the primary base), all before `EventManager`.
+- A leftover empty `Node` named `"Game"` (no script) still sits at the bottom of `Main.tscn`'s tree from before the registry became an autoload — dead, harmless, not yet cleaned up.
 
 ### Layering
 
 ```
       ┌─────────────────────────────────────────┐
       │  UI layer (scripts/ui/)                 │  reads managers, never mutates
-      │  DetailPanel, SquadList, EventList,     │  state directly except via
-      │  SkillSlideout, TopBar, EventMapLabels  │  manager methods
+      │  DetailSidebar, SlideoutPanel, tabs,     │  state directly except via
+      │  detail_view_*/slideout_view_* per type  │  manager methods
       └────────────────┬────────────────────────┘
                        │ signals ↑ / method calls ↓
       ┌────────────────┴────────────────────────┐
       │  Manager layer (scripts/managers/)      │  owns all mutable game state
-      │  GameClock, AgentManager, TeamManager,  │  emits signals on every change
-      │  EventManager, ResourceState,           │
-      │  ConcealmentState                       │
+      │  GameClock, AgentManager, BaseManager,  │  emits signals on every change
+      │  TeamManager, EventManager,             │
+      │  ResourceState, ConcealmentState        │
+      └────────────────┬────────────────────────┘
+                       │ delegates computation to
+      ┌────────────────┴────────────────────────┐
+      │  Handler layer (scripts/managers/)      │  static RefCounted utilities —
+      │  SkillHandler, EquipmentHandler,        │  pure functions, no state,
+      │  MissionResolver, AgentGenerator,       │  no scene access, no
+      │  NameGenerator                          │  registration needed
       └────────────────┬────────────────────────┘
                        │ operates on
       ┌────────────────┴────────────────────────┐
       │  Data layer (scripts/data/)             │  pure Resources, no scene
       │  AgentData, TeamData, EventData,        │  access, mostly dumb structs
-      │  SkillData, VehicleData                 │  + derived getters
+      │  SkillData, VehicleData, BaseData,      │  + derived getters
+      │  EquipmentData + Requirement/Effect     │
+      │  subclasses, SkillTagModifier           │
+      └─────────────────────────────────────────┘
+
+      ┌─────────────────────────────────────────┐
+      │  Resolution strategy layer               │  Strategy pattern — Resource-
+      │  (scripts/managers/resolution/)          │  based, Inspector-swappable
+      │  MissionResolutionStrategy (base),       │
+      │  StatCheckResolutionStrategy (default),  │
+      │  MissionResolutionResult (contract)      │
       └─────────────────────────────────────────┘
 
       ┌─────────────────────────────────────────┐
@@ -67,50 +84,54 @@ Consequences of this choice:
       └─────────────────────────────────────────┘
 ```
 
-**MissionResolver** sits outside this: a `RefCounted` static utility (pure math, no state, no scene access).
+The **Handler layer** is new relative to earlier versions of this doc: as the data model grew (skills split from their computation, equipment added its own cross-cutting math), the "one big static resolver" pattern (`MissionResolver`) got imitated deliberately for each new concern (`SkillHandler` for skill aggregation, `EquipmentHandler` for equipment effects, `AgentGenerator`/`NameGenerator` for procedural content) rather than growing `MissionResolver` into a god-object. Each one is `RefCounted`, entirely static, no persistent state, no autoload registration — plain `class_name` scripts.
+
+The **resolution strategy layer** is also new: `EventManager` no longer calls `MissionResolver` directly. It holds a swappable `resolution_strategy: MissionResolutionStrategy` and calls `resolve(event, squad)` on it; today that's `StatCheckResolutionStrategy`, which internally *does* call `MissionResolver`. See §3.6 and §6.
 
 ### Data flow principle
 
-> **Managers mutate and emit. UI listens and rebuilds. Data objects compute but never reach outward.**
+> **Managers mutate and emit. UI listens and rebuilds. Data objects compute but never reach outward. Handlers compute across data objects but own no state of their own.**
 
-Every state mutation in a manager emits a signal. UI panels connect to those signals and rebuild their contents wholesale (`_clear()` then re-add children). There is no incremental UI diffing anywhere, by design — the panels are small and rebuilding is simpler to reason about than patching.
+Every state mutation in a manager emits a signal. UI panels connect to those signals and rebuild their contents wholesale (`_clear()` then re-add children). There is no incremental UI diffing anywhere, by design.
 
 ---
 
 ## 2. Scene Tree
 
-`scenes/Main.tscn` (root `Main`, type `Node3D`, script `GeoscapeController.gd`):
+`scenes/Main.tscn` (root `Main`, type `Node3D`, script `GeoscapeController.gd`). `Game` (`scripts/game.gd`) is a **project autoload**, not part of this tree — see §1.
 
 ```
 Main                          [GeoscapeController.gd]
 ├── %GeoData                  [GeoData.gd]              country/city lookups
 ├── WeatherController         [WeatherController.gd]
-├── DebugDriver               [debug_driver.gd]         keyboard test harness
+├── DebugDriver                [debug_driver.gd]         keyboard test harness
 ├── %GameClock                [game_clock.gd]           ← must precede listeners
 ├── %ResourceState            [resource_state.gd]
 ├── %ConcealmentState         [concealment_state.gd]
-├── %AgentManager             [agent_manager.gd]        ← must precede TeamManager
-├── %TeamManager              [team_manager.gd]
-├── %EventManager             [event_manager.gd]
+├── %AgentManager             [agent_manager.gd]        ← must precede BaseManager/TeamManager
+├── %BaseManager               [base_manager.gd]         ← must precede TeamManager
+├── %TeamManager               [team_manager.gd]
+├── %EventManager              [event_manager.gd]
 ├── WorldEnvironment
 ├── Globe                     MeshInstance3D + geoscape_material
 │   ├── %MarkerLayer          [MarkerLayer.gd]          event pins + HQ pin
 │   └── TravelPathLayer       [travel_path_layer.gd]    route arcs + team dots
 ├── %Camera3D
 ├── DirectionalLight3D        (disabled — sun is shader-driven)
-└── UI                        CanvasLayer
-    └── Root                  [root_ui.gd]              sidebar layout manager
-        ├── TopBar            [top_bar.gd]
-        ├── %EventMapLabels   [event_map_labels.gd]     clickable chips over markers
-        ├── %SkillSlideout    [slideout_panel.gd]       secondary pop-out panel
-        ├── LeftSidebar → LeftScroll → %DetailPanel  [detail_sidebar.gd]
-        ├── LeftToggle
-        └── RightSidebar → Tabs (TabContainer)
-            ├── Squads → SquadScroll → %SquadList     [agent_tab.gd]
-            │            + "+ New Squad" button (pinned outside scroll)
-            ├── Events → %EventList                   [events_tab.gd]
-            ├── Research   (placeholder)
-            └── Equipment  (placeholder)
+├── UI                        CanvasLayer
+│   └── Root                  [root_ui.gd]              sidebar layout manager
+│       ├── TopBar            [top_bar.gd]
+│       ├── %EventMapLabels   [event_map_labels.gd]     clickable chips over markers
+│       ├── %SkillSlideout    [slideout_panel.gd]       secondary pop-out panel
+│       ├── LeftSidebar → LeftScroll → %DetailPanel  [detail_sidebar.gd]
+│       ├── LeftToggle
+│       └── RightSidebar → Tabs (TabContainer)
+│           ├── Squads → SquadScroll → %SquadList     [agent_tab.gd]
+│           │            + "+ New Squad" button (pinned outside scroll)
+│           ├── Events → %EventList                   [events_tab.gd]
+│           ├── Research   (still a placeholder)
+│           └── Equipment → %EquipmentList             [equipment_tab.gd]  — real now
+└── Game                      empty Node, no script — dead leftover, see §1
 ```
 
 **Layout note:** the left sidebar is 320px, positioned *programmatically* by `root_ui.gd` (`_apply_left`/`_apply_right`) via tweened `offset_left`/`offset_right` — not by scene anchors. `SkillSlideout` (260px) slides out to the *right* of the left sidebar, offset past `LeftToggle` so it never covers the toggle button.
@@ -121,128 +142,125 @@ Main                          [GeoscapeController.gd]
 
 ### 3.1 Proficiencies & Skills (the core stat system)
 
-This replaced the original GDD's five flat skills (Combat/Stealth/Arcane/Diplomacy/Tech).
+This replaced the original GDD's five flat skills (Combat/Stealth/Arcane/Diplomacy/Tech), and was later split into a data/handler pair.
 
-**Six Proficiencies:**
+**Six Proficiencies** (unchanged): Combat, Subterfuge, Attunement, Erudition, Influence, Ingenuity.
 
-| Proficiency | Key | Colour | Domain |
-|---|---|---|---|
-| Combat | `combat` | red-orange | Direct physical intervention, containment, brute force |
-| Subterfuge | `subterfuge` | purple | Infiltration, misdirection, bypassing hazards unnoticed |
-| Attunement | `attunement` | cyan | Raw magical manipulation, warding, sensing auras |
-| Erudition | `erudition` | gold | Occult knowledge, ancient languages, anomaly behaviours |
-| Influence | `influence` | green | Social engineering, crowd control, diplomacy |
-| Ingenuity | `ingenuity` | blue | Modern tech, equipment deployment, tactical adaptation |
+**`SkillData`** (`scripts/data/skill_data.gd`) is now a *plain data container* — the `Proficiency` enum, `PROFICIENCY_NAMES`/`_KEYS`/`_COLORS`, `RANK_SCALE = 20`, `VISIBLE_MAX_RANK = 5`, and one skill's own fields (`skill_name`, `proficiency`, `rank` 1–5, `tags`), plus lookups that only ever need the skill's own data (`get_scaled_rank()`, `has_tag()`, `get_proficiency_name/key()`).
 
-**Proficiencies are never set directly.** They are *derived* from an agent's `Array[SkillData]`. Each `SkillData` has:
-- `skill_name: String` — e.g. "Shadowmeld"
-- `proficiency: Proficiency` — which of the six it feeds
-- `rank: int` (1–5)
-- `tags: PackedStringArray` — e.g. `["Stealth", "Arcane"]`
+**`SkillHandler`** (`scripts/managers/skill_handler.gd`) owns everything that reasons about a *set* of skills, or a skill against something external:
+- `compute_proficiency_rank(skills, active_tags = [])` — the threshold-walk (`RANK_THRESHOLDS`, unchanged table, same rank-6/7 bug — see §10) that turns a list of skill ranks into one 0–10 tier. Now takes an optional `active_tags` context.
+- `compute_effective_rank(skill, active_tags)` — a skill's rank as modified by **tag modifiers** (new — see below), floored at 0. Called internally by `compute_proficiency_rank` before aggregating, so tag modifiers apply *before* the threshold walk, not after.
+- `is_countered_by(skill, counter_tags)` — unchanged tag-intersection test. **Still has no callers in the resolution path** (see §10) — a separate, newer mechanism (tag modifiers, below) now does something similar but isn't the same feature.
+- `instantiate(base_skill, rank)` — duplicates a catalog skill and sets its rank. Used everywhere a skill is assigned to an agent, so multiple agents referencing the same catalog `.tres` never alias one `SkillData` instance.
+- `get_skills_for_proficiency(prof)` — scans `res://data/skills/<proficiency>/` live via `DirAccess`. Adding a `.tres` there makes it available with no code or registration changes.
 
-**Two derived values coexist, and this distinction matters:**
+**Two derived values coexist — and unlike the earlier version of this doc, *both are now live*:**
 
-1. **Proficiency *score*** (`AgentData.get_proficiency_scores()`) — sum of `rank × RANK_SCALE (20)` per category. A 0–200-ish continuous number. **Currently used by almost nothing** — see [§10](#10-known-gaps--tech-debt).
-2. **Proficiency *rank*** (`AgentData.get_proficiency_ranks()`) — a 0–10 tier derived from a threshold table. **This is what the UI shows and what mission resolution uses.**
+1. **Proficiency *score*** (`AgentData.get_proficiency_scores()`) — sum of `rank × 20` per category, 0–200-ish continuous. **Now used**: it's the input to `MissionResolver.compute_score_coverage()`, which is blended into mission suitability (§3.6/§6), and it's what equipment `EffectStatBoost` modifies. Also now shown in the UI next to the Tier pips (agent sheet, proficiency drill-down) specifically so a stat boost too small to move the Tier is still visible.
+2. **Proficiency *rank*** (`AgentData.get_proficiency_ranks()`) — the 0–10 tier. Still the primary signal the UI shows and mission resolution weights most heavily.
 
-**Rank thresholds** (`SkillData.RANK_THRESHOLDS`) — you reach a rank by having *N skills at minimum rank M* in that category:
+**Skill catalog** — `data/skills/<proficiency>/*.tres`, 18 entries (3 per Proficiency), the "Base Skill Roster: Mundane Operatives": every skill carries `[Mundane]` plus two descriptive tags (e.g. Firearms: `[Mundane, Ballistic, Ranged]`). This is a shared *catalog*, not per-agent data — skills aren't agent-specific; `SkillHandler.instantiate()` is how an agent gets their own independent copy at their own rank.
 
-| Prof. Rank | Requires |
-|---|---|
-| 1 | 1 skill @ rank 1+ |
-| 2 | 1 skill @ rank 2+ |
-| 3 | 2 skills @ rank 2+ |
-| 4 | 2 skills @ rank 3+ |
-| 5 | 3 skills @ rank 3+ |
-| 6 | 3 skills @ rank 4+ |
-| 7 | 3 skills @ rank 4+ ⚠️ *identical to 6 — see below* |
-| 8 | 4 skills @ rank 4+ |
-| 9 | 4 skills @ rank 5+ |
-| 10 | 5 skills @ rank 5+ |
+**Tag modifiers (new)** — `SkillTagModifier` (`scripts/data/skill_tag_modifier.gd`): a data-driven rule, `trigger_tag` (a context tag — an event's, say) + `affects_tag` (a skill tag) + `rank_delta`. `SkillHandler.tag_modifiers` preloads every `.tres` under `res://data/tag_modifiers/` (currently two: `fragile_penalizes_explosive.tres` at −1, `swarm_boosts_area.tres` at +1). No skill interaction is ever hardcoded — a new interaction is a new `.tres` file. Currently the only source of "active tags" fed into this system is an event's own `tags` field; `counter_tags` is a separate, still-unwired field (§3.3).
 
-The design intent: **breadth and depth both matter.** A single rank-5 specialist caps at proficiency rank 2. You need multiple competent skills in a category to push higher.
+### 3.2 Starting roster (now procedurally generated)
 
-`SkillData.VISIBLE_MAX_RANK = 5` — the UI only ever draws 5 pips. Ranks 6–10 exist in data for late game but are deliberately not shown yet.
+`AgentManager._create_starting_roster()` no longer hand-authors agents. `@export var starting_roster_size: int = 4` recruits are generated each game start; each independently rolls Generalist vs. Specialist against `@export_range var generalist_chance: float = 0.6` (0.6 = 3:5 generalists = a 2:3 specialist:generalist ratio), then delegates to `AgentGenerator`:
 
-> ⚠️ **Known balance bug:** tiers 6 and 7 have identical requirements, so meeting them awards rank 7 directly and **rank 6 is unreachable**. Needs a pass when late-game tuning happens.
+- **`AgentGenerator.generate_specialist(name, primary, secondary, type)`** — 5 skills: 3 in `primary` at ranks `[2, 1, 1]` (resolves to exactly Proficiency rank 2 via the threshold table — 1 skill ≥ rank 2, not 2, so it caps there) and 2 in `secondary` at `[1, 1]` (resolves to rank 1).
+- **`AgentGenerator.generate_generalist(name, type)`** — 6 skills at rank 1, spread across 4 randomly-chosen Proficiencies (2 with 2 skills, 2 with 1 skill) — every active Proficiency lands at rank 1, since nothing in an all-rank-1 category clears the rank-2 threshold.
+- Recruit names come from **`NameGenerator`** (`scripts/managers/name_generator.gd`): 50 first names × 50 last names (2,500 combinations), picked for the international mix the original hand-authored agents had.
+- All generated recruits are mundane (`SupernaturalType.NONE`) — nothing rolls an Awakened type yet, since there's no Awakened skill catalog for a generator to draw from.
 
-**Tags & counters:** `EventData.counter_tags` negate matching agent skills. `AgentData.get_effective_scores(counter_tags)` implements this — but **it is currently never called**, because resolution moved to the rank system. Wiring counter-tags into the rank path is an open task.
-
-### 3.2 Starting roster (code-generated, not `.tres`)
-
-`AgentManager._create_starting_roster()` builds 4 agents in code. This was a deliberate choice — with no roster-editing UI, code is faster to author and diff than resource files. Revisit when content authoring becomes a real workflow.
-
-| Agent | Type | Skills (rank) | Resulting proficiency ranks |
-|---|---|---|---|
-| **Mara Okonkwo** | Mundane | CQC (K4), Firearms (K3), Fieldcraft (Su2), Threat Assessment (Ig1) | K4, Su2, Ig1 |
-| **Iris Vance** | Shadow | Shadowmeld (Su4), Infiltration (Su3), Dark Channeling (At3), Occult Lore (Er2) | Su4, At2, Er2 |
-| **Desmond Ffrench** | Mundane | Negotiation (In4), Electronic Surveillance (Ig3), Research (Er3), Cryptography (Ig2) | In2, Ig3, Er2 |
-| **Kalinda Reyes** | Seer | Precognition (At3), Combat Training (K2), Intuition (In2), Anomaly Reading (Er2) | At2, K2, In2, Er2 |
-
-**Alpha Team** (all four) therefore fields: **K4, Su4, At2, Er2, In2, Ig3** (team rank = best individual rank per proficiency). Event templates require ranks 1–3 at base difficulty, so the starting team comfortably handles early events and struggles as `magic_intensity` pushes requirements up.
+The old fixed 4-agent roster (Mara Okonkwo, Iris Vance, Desmond Ffrench, Kalinda Reyes) is gone from code; the flavor names now only exist in `NameGenerator`'s pool and in git history.
 
 ### 3.3 Events
 
-`EventData` — spawned by `EventManager` from `_SPAWN_TEMPLATES`, placed at a real city via `GeoData.get_random_city(50000)`.
+`EventData` — spawned by `EventManager` from `spawn_templates: Array[EventData]`, an `@export` array **empty by default**, populated via the Inspector by dragging in `.tres` resources from `res://data/event_templates/` (7 exist on disk: the 6 spawnable types + `portal_breach` as escalation-only; as configured today only `magical_surge.tres` is actually wired into the live `spawn_templates` array — the rest exist but aren't in the active pool until someone drags them in). `spawn_random_event()` `duplicate(true)`s the chosen template rather than building one from scratch.
 
 - **Requirements are proficiency ranks** (`req_combat: int` 0–10, etc.), *not* raw scores. 0 = irrelevant.
-- **Status lifecycle:** `ACTIVE → DEPLOYED → RESOLVED_SUCCESS | RESOLVED_PARTIAL | RESOLVED_FAIL`, or `ACTIVE → EXPIRED`.
-- **`DEPLOYED` pauses the countdown** — `_tick_active_events()` skips non-`ACTIVE` events, so an event doesn't expire out from under a team in transit.
-- **Escalation:** on expiry, if `can_escalate`, spawns `escalates_to` at the same location with every non-zero requirement bumped by `escalation_rank_bump` (default +1).
-- **Decision-event fields exist but are entirely unused** (`is_decision_event`, `decision_prompt`, `decision_option_*`) — scaffolding for Milestone 3.
+- **`tags: PackedStringArray`** (new) — an event's context tags, fed into `SkillHandler`'s tag-modifier system as `active_tags` during resolution. **`counter_tags`** (older field) is still present but still has no caller in the resolution path — see §10.
+- **`mission_duration_hours: float = 2.0`** (new) — how long a deployed team spends actively on-site working the event, once they arrive, before heading home. See §3.4 and §6 for the state machine this drives.
+- **Status lifecycle:** `ACTIVE → DEPLOYED → RESOLVED_SUCCESS | RESOLVED_PARTIAL | RESOLVED_FAIL`, or `ACTIVE → EXPIRED`. Unchanged.
+- **`DEPLOYED` pauses the countdown** — unchanged.
+- **Escalation:** unchanged — on expiry, if `can_escalate`, spawns `escalates_to` at the same location with every non-zero requirement bumped by `escalation_rank_bump`.
+- **Decision-event fields still entirely unused** (`is_decision_event`, `decision_prompt`, `decision_option_*`).
 
-**Spawn templates** (base ranks, order: `[K, Su, At, Er, In, Ig]`):
+### 3.4 Teams & Travel (now three legs, not two)
 
-| Type | Urgency | Reqs | Days | Escalates to |
-|---|---|---|---|---|
-| Cryptid Sighting | Low | `[1,2,0,0,0,0]` | 4 | — |
-| Magical Surge | Medium | `[0,0,2,1,0,1]` | 3 | Portal Breach |
-| Artifact Activation | Medium | `[0,1,1,1,0,2]` | 3 | — |
-| Cult Activity | High | `[2,1,0,0,2,0]` | 3 | Portal Breach |
-| Haunting | Low | `[0,1,2,0,0,0]` | 4 | — |
-| Fairy Incursion | Medium | `[1,0,1,1,2,0]` | 3 | — |
-| *Portal Breach* (escalation only) | High | `[1,1,3,1,0,2]` | 3 | — |
+`TeamData` — 3–5 members (`MIN_SIZE`/`MAX_SIZE`), `cohesion` 0–100 (up to `MAX_COHESION_BONUS = 0.5`).
 
-Difficulty scaling: `bonus = int(magic_intensity - 1.0)` added to every non-zero requirement, capped at 10.
-
-### 3.4 Teams & Travel
-
-`TeamData` — 3–5 members (`MIN_SIZE`/`MAX_SIZE`), `cohesion` 0–100 (up to `MAX_COHESION_BONUS = 0.5`, i.e. +50%).
-
-**Location & travel state:**
+**Location & state:**
 ```gdscript
 location / location_name              # where they are now
-is_traveling                          # the "away" flag
-travel_destination / _name            # where they're headed
-travel_departure_day / travel_arrival_day
-travel_event_id                       # what to resolve on arrival
-travel_vehicle_name                   # which vehicle is carrying them
-travel_is_return                      # true on the trip home
-travel_return_to / _name              # where "home" was when they left
+is_traveling                          # the "away, physically moving" flag
+travel_destination / _name / travel_departure_day / travel_arrival_day
+travel_event_id / travel_vehicle_name / travel_is_return
+travel_return_to / _name
 pending_agent_results                 # agent_id → Status, applied on return
+
+# New: the on-site "working the mission" phase, distinct from is_traveling
+is_on_mission
+mission_ready_day                     # fractional-day target, same units as travel_arrival_day
+mission_event_id
 ```
 
-**HQ:** `TeamManager.HQ_LOCATION = Vector2(13.405, 52.52)` (Berlin, lon/lat), `HQ_NAME = "HQ (Berlin, Germany)"`. All new teams spawn there via `_at_hq()`.
+A deployment's full timeline is now: **travel there** (`is_traveling`) → **work the mission** (`is_on_mission`, for `event.mission_duration_hours`) → **resolve** → **travel home** (`is_traveling`, `travel_is_return = true`). `TeamManager._process()` checks both `is_traveling`/`travel_arrival_day` and `is_on_mission`/`mission_ready_day` every frame (sub-day precision matters for short hops and short missions alike). On physical arrival, if the event's `mission_duration_hours > 0`, the team parks in `is_on_mission` instead of immediately firing `team_arrived`; `_complete_mission_work()` fires the same signal once the timer elapses. **`EventManager` needed zero changes for this** — it still just resolves on `team_arrived`, whenever it actually fires.
 
-### 3.5 Vehicles
+**HQ moved off `TeamManager`** — see §3.7. `TeamManager._at_hq(team)` now reads `Game.base_manager.get_primary_base()` instead of a local constant.
 
-`VehicleData` — the base fleet lives in `TeamManager.vehicles: Array[VehicleData]`. Vehicles are **not** owned by teams; the best one is auto-selected per dispatch.
+### 3.5 Vehicles (now base-local)
 
-Starting vehicle — **Airbus H225 / EC725 transport helicopter**, loosely modelled on the real airframe (~260 km/h cruise, 900–1200 km range) with numbers pushed up for black-budget plausibility:
+`VehicleData` fields: `vehicle_name`, `description`, `speed_kmh` (not `speed_km_per_day` — renamed early this project after realizing day-scaled speed was an internal-tick convenience, not a domain unit a player reads), `max_range_km`, `capacity`, `operation_cost` (displayed, not yet charged), `mode` (`CONTINUOUS` / `TELEPORT`, only `CONTINUOUS` used), `cooldown_days`.
 
-| Field | Value |
-|---|---|
-| `speed_km_per_day` | 2400 |
-| `max_range_km` | 3000 (hard cutoff) |
-| `capacity` | 8 agents |
-| `operation_cost` | 0 *(displayed, not yet charged)* |
-| `mode` | `CONTINUOUS` |
+**Vehicles no longer live on `TeamManager`.** They belong to whichever `BaseData` owns them (§3.7); `TeamManager.get_best_vehicle()` now searches `Game.base_manager.get_all_vehicles()` — every base's fleet pooled together, a stand-in until teams track a specific home base to search just its own fleet.
 
-`Mode.TELEPORT` exists as a seam (instant, `max_range_km` per jump, `cooldown_days`) but **nothing uses it yet**.
+Starting vehicle unchanged — Airbus H225/EC725, 320 km/h, 3000 km range (hard cutoff), 8 capacity, `data/vehicles/eurocopter_h225.tres`.
 
-**Range is a hard gate, not a speed penalty.** Beyond 3000 km, `get_best_vehicle()` returns `null`, `begin_travel()` refuses, and the deploy UI disables the button. This is intentional tension: distant events simply expire until better transport exists.
+### 3.6 Equipment (new — composition over inheritance)
 
-`TeamManager.get_best_vehicle(distance, team_size)` picks the **fastest** vehicle that can both reach the distance and carry the team, tie-broken by lowest `operation_cost`.
+`EquipmentData` (`scripts/data/equipment_data.gd`) is a container of composable Resources a designer mixes in the Inspector, not hardcoded per-item logic:
+
+```gdscript
+equipment_name: String
+slot_type: String            # @export_enum("Weapon", "Armor", "Gadget")
+description: String
+requirements: Array[EquipmentRequirement]
+effects: Array[EquipmentEffect]
+```
+
+**Requirements** (`scripts/data/equipment/`) — `EquipmentRequirement` base (`is_met(agent) -> bool`, `get_description() -> String`), subclassed by:
+- `ReqProficiencyRank` — agent's *effective* rank (equipment-inclusive) in a Proficiency ≥ some value.
+- `ReqSkillTag` — agent has a skill (own or gear-granted) carrying a tag.
+- `ReqSupernaturalType` — agent's origin matches exactly.
+
+Checked against the agent's **current** effective state, not their bare sheet — so one equipped item's bonus can satisfy another item's requirement. Equip order can matter for borderline loadouts; this was a deliberate simplicity choice over building "requirements ignore other gear."
+
+**Effects** — `EquipmentEffect` base with three no-op-by-default hooks, run in this order by `EquipmentHandler`:
+1. `apply_to_skills(skills)` — on a duplicated working copy of the agent's skill list.
+2. `apply_to_ranks(ranks)` — after Proficiency ranks are aggregated from that pool.
+3. `apply_to_scores(scores)` — after Proficiency scores are summed from that pool.
+
+Subclasses: `EffectStatBoost` (flat addition to one Proficiency's *score*), `EffectGrantSkill` (appends a virtual `SkillData`, duplicated so the shared template is never mutated), `EffectModifySkill` (finds skills matching a tag and adds a tag/rank to duplicates of them).
+
+**`EquipmentHandler`** (`scripts/managers/equipment_handler.gd`) is the aggregation/validation engine: `can_equip()`, `get_effective_skills()` (the equipment-modified skill pool, never mutating the agent's real `SkillData`), `apply_rank_effects()`/`apply_score_effects()` (split out so `MissionResolver`'s team-level pooling can reuse them per-member), `compute_effective_ranks()`/`compute_effective_scores()`.
+
+**`AgentData`** gained `equipped_weapon`/`equipped_armor`/`equipped_gadget` (`EquipmentData`, replacing the old inert `weapon_slot`/`armor_slot`/`gadget_slot` strings — `magical_item_slot` is still a plain string, not covered by the 3-slot system), plus `can_equip()`/`equip()`/`unequip()`. **`get_proficiency_ranks()`/`get_proficiency_scores()` are equipment-aware by default** — every existing caller (resolution, UI) picked this up automatically, no call sites changed.
+
+**A real engine quirk hit and worked around:** `Resource.duplicate()` doesn't reliably break copy-on-write sharing for `PackedStringArray` export fields in this Godot build — `EffectModifySkill` originally corrupted the *original* skill's tags when adding a tag to a duplicate. Fixed by rebuilding the tags array element-by-element from scratch instead of mutating a derived copy. Worth remembering before writing any other code that mutates a duplicated Resource's array fields.
+
+**Storage:** `AgentManager.equipment_inventory` (an earlier, single-pool attempt) is gone — see §3.7, equipment now lives on `BaseManager`.
+
+**UI:** `equipment_tab.gd` (right sidebar, flat unsorted list — sorting/categories deferred until there's enough content to need them), `slideout_view_equipment.gd` (read-only info card: slot, description, requirements, effects — each requirement/effect has a `get_description()` for this), `slideout_view_equip_slot.gd` (the agent-sheet picker: shows what's equipped with an Unequip button, then every candidate item with the specific unmet requirement shown if the agent doesn't qualify).
+
+### 3.7 Bases (new)
+
+`BaseManager` (`scripts/managers/base_manager.gd`) owns `bases: Array[BaseData]` plus `global_equipment: Array[EquipmentData]` (usable from any base, as opposed to a base's own local stock). **Single-base for now, by design** — this was an explicit scope decision (data model ready for multiple bases; no gameplay yet lets the player found a second one or station a team at a specific base). If `bases` is empty on `_ready()`, it seeds one HQ (`"HQ (Berlin, Germany)"`, the same location as before) with the starting Eurocopter.
+
+`BaseData` (`scripts/data/base_data.gd`): `id`, `base_name`, `location` (lon/lat), `vehicles: Array[VehicleData]`, `local_equipment: Array[EquipmentData]`.
+
+`BaseManager.get_primary_base()` / `get_all_vehicles()` / `get_all_equipment()` are **explicitly documented as pooling stand-ins** — every current caller treats "which base" as "all of them, indiscriminately," because nothing (no team, no agent) tracks a home base yet. Wiring real per-base availability is a distinct, not-yet-started task; adding a second base today would work data-wise but wouldn't change any behavior, since nothing filters by which base is "yours."
 
 ---
 
@@ -251,22 +269,10 @@ Starting vehicle — **Airbus H225 / EC725 transport helicopter**, loosely model
 ### `scripts/data/`
 
 #### `skill_data.gd` → `class_name SkillData extends Resource`
-The atom of the stat system. Also the **home of all proficiency constants** — other files read `SkillData.PROFICIENCY_KEYS` etc. rather than redefining them.
+Plain data now — see §3.1. `Proficiency` enum + `PROFICIENCY_NAMES/_KEYS/_COLORS` + `RANK_SCALE`/`VISIBLE_MAX_RANK`, `skill_name`/`proficiency`/`rank`/`tags`, `get_proficiency_name()/_key()`, `get_scaled_rank()`, `has_tag()`, static `proficiency_key_for()/_name_for()`.
 
-| Member | Purpose |
-|---|---|
-| `enum Proficiency` | COMBAT, SUBTERFUGE, ATTUNEMENT, ERUDITION, INFLUENCE, INGENUITY |
-| `PROFICIENCY_NAMES / _KEYS / _COLORS` | Display name, dict key, UI colour — indexed by enum |
-| `RANK_SCALE = 20` | Multiplier for score derivation |
-| `VISIBLE_MAX_RANK = 5` | How many pips the UI draws |
-| `RANK_THRESHOLDS` | 10-entry `[{min_skills, min_rank}]` table |
-| `_init(name, prof, rank, tags)` | Convenience ctor used by the roster generator |
-| `get_proficiency_key() / _name()` | Enum → string |
-| `get_scaled_rank()` | `rank * RANK_SCALE` |
-| `is_countered_by(counter_tags)` | Tag intersection test |
-| `static compute_proficiency_rank(skills)` | The threshold-walk that produces a 0–10 tier |
-| `static empty_proficiency_dict()` | Zeroed float dict (scores) |
-| `static empty_rank_dict()` | Zeroed int dict (ranks) |
+#### `skill_tag_modifier.gd` → `class_name SkillTagModifier extends Resource`
+`trigger_tag`, `affects_tag`, `rank_delta`. See §3.1.
 
 #### `agent_data.gd` → `class_name AgentData extends Resource`
 | Member | Purpose |
@@ -275,128 +281,118 @@ The atom of the stat system. Also the **home of all proficiency constants** — 
 | `skills: Array[SkillData]` | Source of truth for all stats |
 | `supernatural_type, supernatural_power` | Flavour + future synergies |
 | `max_health` / runtime `health, morale, experience, level, status` | Condition |
-| `weapon_slot, armor_slot, gadget_slot, magical_item_slot` | Plain strings — no equipment system yet |
+| `equipped_weapon/armor/gadget: EquipmentData`, `magical_item_slot: String` | Real equipment slots (last one still a placeholder string) |
 | `setup(name, skills, type)` | Assigns id, seeds health |
-| `get_proficiency_scores()` | Continuous 0–200 scores *(largely unused)* |
-| `get_effective_scores(counter_tags)` | Counter-tag-aware scores *(currently unused)* |
-| `get_proficiency_ranks()` | **The one the UI and resolver use** |
+| `get_proficiency_scores()` | **Equipment-aware** 0–200 scores — now used, see §3.1/§3.6 |
+| `get_effective_scores(counter_tags)` | Counter-tag-aware scores; equipment-aware skills, but *not* stat-boost-aware. Still no callers in resolution |
+| `get_proficiency_ranks(active_tags = [])` | **Equipment- and tag-modifier-aware.** The one resolution and the UI use |
 | `get_skills()` | Legacy alias → `get_proficiency_scores()` |
 | `get_primary_proficiency()` | Highest-scoring category key |
+| `can_equip(item) / equip(item) / unequip(slot_type)` | See §3.6 |
 | `get_type_name() / get_status_name() / is_available()` | Display + guards |
-| `compute_suitability(event)` | Solo-agent coverage via `MissionResolver` |
+| `compute_suitability(event)` | Solo-agent rank coverage via `MissionResolver`. Unused (dead code — nothing calls it) |
 
 #### `team_data.gd` → `class_name TeamData extends Resource`
-Constants `MIN_SIZE=3`, `MAX_SIZE=5`, `MAX_COHESION_BONUS=0.5`. Holds membership, cohesion, location, and the full travel-state block (§3.4).
-`compute_effective_skills(members)` — level-weighted, cohesion-boosted score dict. **Currently has no callers** (superseded by `MissionResolver.compute_team_ranks`); kept because cohesion needs to re-enter resolution somewhere.
+Constants `MIN_SIZE=3`, `MAX_SIZE=5`, `MAX_COHESION_BONUS=0.5`. Holds membership, cohesion, location, the travel-state block, and the newer on-mission state block (§3.4).
+`compute_effective_skills(members)` — level-weighted, cohesion-boosted score dict. **Still has no callers** — cohesion still has zero effect on mission outcomes (§10).
 
 #### `event_data.gd` → `class_name EventData extends Resource`
 See §3.3. Key methods: `setup()`, `set_proficiency_profile(6 ints)`, `get_proficiency_requirements()` → dict, `get_primary_proficiency()`, `get_total_difficulty()`, `get_urgency_color()`, `is_expired()`.
 
 #### `vehicle_data.gd` → `class_name VehicleData extends Resource`
-See §3.5. `compute_travel_days(distance)` (min 1 day for CONTINUOUS, 0 for TELEPORT), `can_reach(distance)`, `can_carry(team_size)`, `get_mode_name()`.
+See §3.5. `compute_travel_hours(distance)`, `can_reach(distance)`, `can_carry(team_size)`, `get_mode_name()`, static `format_duration(hours)`.
+
+#### `base_data.gd` → `class_name BaseData extends Resource`
+See §3.7. `setup(name, location)`.
+
+#### `equipment_data.gd` → `class_name EquipmentData extends Resource`
+See §3.6.
+
+#### `scripts/data/equipment/`
+`equipment_requirement.gd` (base) + `req_proficiency_rank.gd` / `req_skill_tag.gd` / `req_supernatural_type.gd`.
+`equipment_effect.gd` (base) + `effect_stat_boost.gd` / `effect_grant_skill.gd` / `effect_modify_skill.gd`.
+All described in §3.6.
 
 ---
 
 ### `scripts/managers/`
 
-#### `game_clock.gd` — `%GameClock`
-The single source of truth for in-game time. `GeoscapeController` derives sun position and calendar date from it, so the visual day/night cycle can never drift from the simulation.
+#### `game_clock.gd` — `%GameClock` / `Game.game_clock`
+Ticks in whole **hours** internally (`hour_advanced(hour)`), `day_advanced(day)` still fires exactly every 24 hours. `HOURS_PER_DAY = 24`, `seconds_per_day = 60.0` (real seconds per game day), `current_day`, `current_hour`, `paused`. `advance_days(n)`/`advance_hours(n)` for debug stepping (ignore `paused`). `set_speed(seconds)` rescales `_accum` proportionally so the sun/progress bar stays continuous across a speed change. `get_day_progress()` (0–1), `get_current_time_days()` (fractional day count — the canonical "now" for travel/mission timing, sub-day precision).
 
-| Member | Notes |
-|---|---|
-| `seconds_per_day = 60.0` | Real seconds per game day |
-| `current_day, paused, _accum` | |
-| `_process(delta)` | Accumulates, fires `_advance_day()` per full day |
-| `pause() / resume() / toggle_pause()` | |
-| `advance_days(n)` | Debug stepping — **deliberately ignores `paused`** |
-| `set_speed(seconds)` | **Rescales `_accum` proportionally** so day-progress stays continuous — without this the terminator teleports on speed change (fixed bug) |
-| `get_day_progress()` | 0–1 fraction through the current day; drives sun + travel dot |
+#### `resource_state.gd` — `%ResourceState` / `Game.resource_state`
+Unchanged: Funding (500), Intel (20), `earn_*`/`spend_*`, change signals.
 
-#### `resource_state.gd` — `%ResourceState`
-Funding (500) and Intel (20). `earn_*` / `spend_*` (spend returns `false` if insufficient), signals on change. Kept separate from concealment: a plain ledger vs. a threshold meter.
+#### `concealment_state.gd` — `%ConcealmentState` / `Game.concealment_state`
+Unchanged: 0–100 meter, daily decay, threshold signals at 25/50/75/100 (100 stubbed, no Act 3 transition).
 
-#### `concealment_state.gd` — `%ConcealmentState`
-0–100 meter. `daily_decay = 1.0` on each `day_advanced`. `add()` / `reduce()`. Fires `threshold_crossed` at 25/50/75/100 and `revelation_triggered()` at 100 (stubbed — no Act 3 transition).
+#### `agent_manager.gd` — `%AgentManager` / `Game.agent_manager`
+`roster: Array[AgentData]`, `starting_roster_size: int = 4`, `generalist_chance: float = 0.6` (§3.2). `get_available_agents()`, `get_agent_by_id()`, `set_status()` — KIA still erases from the roster permanently. `print_roster_status()`.
 
-#### `agent_manager.gd` — `%AgentManager`
-Owns `roster: Array[AgentData]`. `_create_starting_roster()` (§3.2), `get_available_agents()`, `get_agent_by_id()`, `set_status()` — **on `KIA` the agent is erased from the roster permanently** (permadeath). `print_roster_status()` for debug.
+#### `base_manager.gd` — `%BaseManager` / `Game.base_manager` (new)
+See §3.7. `bases`, `global_equipment`, `get_primary_base()`, `get_all_vehicles()`, `get_all_equipment()`.
 
-#### `team_manager.gd` — `%TeamManager`
-The largest manager. Owns teams, HQ, the vehicle fleet, training, and all travel.
-
+#### `team_manager.gd` — `%TeamManager` / `Game.team_manager`
 | Function | Purpose |
 |---|---|
-| `_create_starting_team()` | Groups the whole 4-agent roster into "Alpha Team" |
-| `_at_hq(team)` | Stamps HQ location onto a new team |
-| `create_empty_team(name)` | **Bypasses MIN_SIZE** — needed for the drag-and-drop squad-building flow |
+| `_create_starting_team()` | Groups the whole procedurally-generated roster into "Alpha Team" |
+| `_at_hq(team)` | Stamps `Game.base_manager.get_primary_base()`'s location onto a new team |
+| `create_empty_team(name)` | Bypasses MIN_SIZE — needed for drag-and-drop squad building |
 | `create_team(name, ids)` | Validating constructor (enforces 3–5) |
-| `rename_team(id, name)` | |
-| `add_member / remove_member / swap_member` | Each scales cohesion proportionally rather than resetting it |
+| `rename_team` / `add_member` / `remove_member` / `swap_member` | Membership ops; cohesion scales proportionally rather than resetting |
 | `grant_mission_cohesion(id)` | +8 after any mission, win or lose |
-| `start_training(id)` / `_finish_training(id)` | 2 days, all members must be Available, +12 cohesion |
-| `get_training_days_left(id)` | |
-| **`get_best_vehicle(dist, size)`** | Fastest reachable + capable vehicle, tie-break on cost |
-| **`begin_travel(id, dest, name, event_id)`** | Picks vehicle, computes days, marks members DEPLOYED, records return point. Returns plan dict or `{}` |
-| **`begin_return_travel(id)`** | Sends them home; members stay DEPLOYED |
-| **`_complete_travel(team)`** | On return leg: applies `pending_agent_results`. Either way: updates location, emits `team_arrived` |
-| `_on_day_advanced` | Ticks training countdowns **and** checks travel arrivals |
+| `start_training(id)` / `_finish_training(id)` | 2 days, +12 cohesion |
+| `get_best_vehicle(dist, size)` | Now searches `Game.base_manager.get_all_vehicles()` (§3.5) |
+| `begin_travel(id, dest, name, event_id)` | Picks vehicle, computes hours, marks members DEPLOYED, records return point |
+| `begin_return_travel(id)` | Sends them home; members stay DEPLOYED |
+| `_complete_travel(team)` | On arrival: if the event has `mission_duration_hours > 0`, parks the team in `is_on_mission` instead of resolving immediately (§3.4); on the return leg, applies `pending_agent_results` |
+| `_complete_mission_work(team)` | New — fires once `mission_ready_day` is reached, emits `team_arrived` |
+| `_process` | Checks travel-arrival **and** mission-ready every frame, sub-day precision |
 
-#### `event_manager.gd` — `%EventManager`
+#### `event_manager.gd` — `%EventManager` / `Game.event_manager`
 | Function | Purpose |
 |---|---|
+| `resolution_strategy: MissionResolutionStrategy` | **New** — Strategy pattern seam, live-default `StatCheckResolutionStrategy.new()` so the Inspector always shows a populated, expandable resource. Swappable at runtime or via the Inspector |
+| `spawn_templates` / `escalation_templates: Array[EventData]` | **New** — Inspector-populated pools (empty by default; see §3.3) replacing the old hardcoded template consts |
 | `_on_day_advanced` | `magic_intensity += 0.02`; tick events; maybe spawn |
-| `_maybe_spawn_event()` | `chance = clamp(0.35 * magic_intensity, 0, 0.95)` |
-| `spawn_random_event(template?)` | Builds `EventData`, scales reqs, places at a real city |
-| `_tick_active_events()` | Decrements `days_remaining` for `ACTIVE` events only |
-| `_handle_expiration(event)` | EXPIRED + concealment + optional escalation |
-| `_spawn_escalation(parent)` | Child at same location, reqs bumped |
-| **`deploy_team(event_id, team_id)`** | Marks event DEPLOYED, delegates to `begin_travel`. Returns plan dict |
-| **`_on_team_arrived(team_id, event_id)`** | Resolves the mission, stashes agent outcomes as *pending*, starts the return trip |
-| `_apply_resolution(event, result)` | Rewards / concealment / final status. **Does not apply agent statuses** (deferred to return) |
-| `resolve_event_solo(event_id, agent_id)` | Legacy instant path — unused by UI, applies statuses immediately |
+| `spawn_random_event(template?)` | `duplicate(true)`s the chosen template `EventData`, scales reqs, places at a real city |
+| `deploy_team(event_id, team_id)` | Marks event DEPLOYED, delegates to `begin_travel` |
+| `_on_team_arrived(team_id, event_id)` | Calls `resolution_strategy.resolve()`, backfills any missing `agent_results` (see below), stashes outcomes as pending, starts the return trip |
+| `_backfill_agent_results(members, result)` | **New** — fills in AVAILABLE for any squad member a strategy's `agent_results` left out, so a strategy that doesn't mention an agent can't strand them DEPLOYED forever. No status change means they came home safe |
+| `_apply_resolution(event, result)` | Rewards / concealment / final status |
+| `resolve_event_solo(event_id, agent_id)` | Legacy instant path — unused by UI, applies statuses immediately, also backfilled |
+
+#### `skill_handler.gd` → `class_name SkillHandler extends RefCounted`
+See §3.1. `RANK_THRESHOLDS`, `tag_modifiers`, `compute_effective_rank()`, `compute_proficiency_rank(skills, active_tags?)`, `is_countered_by()`, `instantiate(base, rank)`, `get_skills_for_proficiency(prof)`, `empty_proficiency_dict()`/`empty_rank_dict()`.
+
+#### `equipment_handler.gd` → `class_name EquipmentHandler extends RefCounted`
+See §3.6.
 
 #### `mission_resolver.gd` → `class_name MissionResolver extends RefCounted`
-Static-only, no state.
-
 | Function | Purpose |
 |---|---|
-| `compute_rank_coverage(ranks, event)` | Mean of `clamp(agent_rank / required_rank, 0, 2)` across required proficiencies. ~1.0 = exact match |
-| `compute_team_ranks(members)` | **Best individual rank per proficiency** across the team |
-| `compute_team_suitability(event, members, team?)` | Coverage + `_compute_synergy_bonus()` (stubbed at 0.0) |
-| `resolve(event, members, team?)` | `chance = clamp(0.3 + suitability*0.4, 0.05, 0.95)`; roll buckets into success (≤ 60% of chance) / partial (≤ chance) / failure. Injury 5%/15%/15–50%; KIA = injury × 0.2. Returns `{outcome, roll, chance, team_suitability, agent_results}` |
+| `compute_rank_coverage(ranks, event)` | Mean of `clamp(rank / required_rank, 0, 2)` across required proficiencies |
+| `compute_team_ranks(members, active_tags?)` | **Changed — "teamwork" pooling, marked experimental in code.** Every member's *effective* skills (own + equipment-granted/modified) are pooled into one shared pile per category *before* rank aggregation, instead of each member's rank being computed independently and the team taking the best. Two agents with one rank-2 skill each can jointly reach rank 3. Each member's equipped flat-rank effects apply on top afterward. Reduces to a solo agent's own ranks for a 1-member team |
+| `compute_team_scores(members)` | New — simple per-member sum (score is linear, no threshold quirks) |
+| `compute_score_coverage(team_scores, event)` | New — score-based counterpart to rank coverage, comparing against `req × RANK_SCALE` |
+| `compute_team_suitability(event, members)` | **Changed** — `lerp(rank_coverage, score_coverage, SCORE_WEIGHT=0.2) + synergy_bonus(stub, 0.0)`. Score is a smaller-weighted continuous nudge so equipment bonuses too small to cross a rank threshold still move suitability |
+
+#### `agent_generator.gd` → `class_name AgentGenerator extends RefCounted` (new)
+See §3.2. `Archetype` enum, `generate_specialist()`, `generate_generalist()`, `generate_random_specialist()`, `generate()`.
+
+#### `name_generator.gd` → `class_name NameGenerator extends RefCounted` (new)
+See §3.2. `FIRST_NAMES`/`LAST_NAMES` (50 each), `generate_name()`.
+
+#### `scripts/managers/resolution/` (new — the Strategy pattern)
+- `mission_resolution_strategy.gd` → `class_name MissionResolutionStrategy extends Resource` — base, `resolve(event, squad) -> MissionResolutionResult`.
+- `stat_check_resolution_strategy.gd` → `class_name StatCheckResolutionStrategy extends MissionResolutionStrategy` — the original math, moved here unchanged: `chance = clamp(0.3 + suitability*0.4, 0.05, 0.95)`; roll ≤ chance×0.6 → success, ≤ chance → partial, else failure; injury 5%/15%/`lerp(15%,50%,badness)`; KIA = injury × 0.2.
+- `mission_resolution_result.gd` → `class_name MissionResolutionResult extends RefCounted` — `Outcome` enum (SUCCESS/PARTIAL/FAILURE), `roll`, `chance`, `team_suitability`, `agent_results: Dictionary`. The contract every strategy must fill in and every caller (EventManager, UI) reads — see §6 for exactly what's handed to `resolve()` and what isn't (no `TeamData`, no separate active-tags argument — a strategy derives context from `event.tags` itself).
 
 ---
 
 ### `scripts/` (geoscape)
 
-#### `GeoscapeController.gd` (on `Main`)
-Globe rotation/momentum, zoom (with zoom-toward-cursor when flat), **drag-to-pan on the flat map**, sphere↔plane unfold (`Tab`), sun/season/calendar driven by `GameClock`.
-
-- `get_flatten_amount()` — exposes the smooth 0–1 unfold blend. **Other layers must read this**, not the shader material (see §8).
-- `get_date_string()` / `get_current_year()` / `set_date(m, d)` — calendar.
-- `enable_cell_selection` / `enable_detail_view` — **both `false`.** The legacy grid-cell hover/click and the corner detail quad are gated off, not deleted. All click/hover/detail code paths null-check against these.
-
-#### `GeoData.gd` → `class_name GeoData`
-Loads `country_index_map.png` + `countries.json` + `cities.json` (258 countries, 7342 cities).
-`get_country_at(lon,lat)`, `get_nearest_city()`, `get_nearby_cities()`, `get_random_city(min_pop)`, `describe_location()`, and **`static haversine_km(lat1,lon1,lat2,lon2)`** — static so `TeamManager` can compute distances without an instance.
-
-#### `MarkerLayer.gd` (`%MarkerLayer`, child of Globe)
-Owns all surface pins and resolves clicks. Subscribes to `EventManager` to add/remove event pins automatically. Creates the permanent HQ pin in `_create_hq_marker()`.
-`add_site()`, `remove_site()`, `select()`, `_pick_marker(pos, radius)` (screen-space nearest, camera-facing only), `get_event_marker(id)`, `set_flatten(v)`.
-
-#### `SurfaceMaker.gd` → `class_name SurfaceMarker` (`@tool`)
-One billboard pin. **Contains the canonical lat/lon → position math that must stay in sync with `geoscape.gdshader`:**
-- `static latlon_to_position(lat, lon, radius)` — sphere
-- `static latlon_to_flat_position(lat, lon)` — plane (`PLANE_HALF_WIDTH = PI`, `PLANE_HALF_HEIGHT = PI/2`)
-- `_reposition()` — replicates the shader's **two-stage** unfold (sphere→cylinder, then unroll) so pins track coastlines mid-animation.
-
-Properties: `selected`, `hovered`, `is_base` (diamond HQ icon), `spawn_highlight_duration = 2.5` (one-shot "new event" ring).
-
-#### `travel_path_layer.gd` (child of Globe)
-Draws, per traveling team, an `ImmediateMesh` line (40 segments) plus a dot at the interpolated current position.
-- Sphere: `Vector3.slerp` great-circle arc. Flat: linear interpolation. Blended by `get_flatten_amount()`.
-- **Documented simplification:** unlike `SurfaceMarker`, it does *not* replicate the two-stage unroll — it's exact at flatten 0 and 1, approximate only during the ~0.5 s transition.
-- Auto-picks up the return leg (it just watches `is_traveling`).
+Unchanged from the previous version of this doc — `GeoscapeController.gd`, `GeoData.gd`, `MarkerLayer.gd` (now reads `Game.base_manager.get_primary_base()` for the HQ pin instead of `TeamManager.HQ_NAME`/`HQ_LOCATION`), `SurfaceMarker.gd`, `travel_path_layer.gd`. See §8 for the marker/shader-sync gotchas, still current.
 
 ---
 
@@ -404,46 +400,44 @@ Draws, per traveling team, an `ImmediateMesh` line (40 segments) plus a dot at t
 
 | File | Node | Role |
 |---|---|---|
-| `root_ui.gd` | `UI/Root` | Sidebar open/close tweens, slideout positioning, and **the central signal-to-panel wiring** (`agent_selected`, `team_selected`, `event_selected`, `event_label_clicked`, `event_marker_clicked`, `hq_marker_clicked`) |
-| `top_bar.gd` | `TopBar` | Date, pause, 1x/2x/4x speed, funding, intel, concealment bar with 25/50/75 ticks + threshold flash |
-| `agent_tab.gd` | `%SquadList` | Squad list grouped by team, **drag-and-drop agents between squads**, "+ New Squad" pinned at the bottom outside the scroll |
+| `root_ui.gd` | `UI/Root` | Sidebar tweens, slideout positioning, central signal-to-panel wiring |
+| `top_bar.gd` | `TopBar` | Date, pause, speed, funding, intel, concealment bar |
+| `agent_tab.gd` | `%SquadList` | Squad list, drag-and-drop, "+ New Squad" |
 | `events_tab.gd` | `%EventList` | Active events sorted by urgency then time |
-| `detail_sidebar.gd` | `%DetailPanel` | Left panel **loader** — owns `_View` enum (`EMPTY, AGENT, TEAM, EVENT, RESULT, HQ`), refresh-on-signal wiring, and which `detail_view_*.gd` is currently instantiated. Doesn't build any UI itself. |
-| `slideout_panel.gd` | `%SkillSlideout` | Pop-out **loader** — owns panel chrome (styling, scroll area), `_Mode` enum (`PROFICIENCY, DEPLOY, VEHICLE`), and which `slideout_view_*.gd` is currently instantiated. |
-| `event_map_labels.gd` | `%EventMapLabels` | Screen-space clickable title chips above each event pin |
+| `equipment_tab.gd` | `%EquipmentList` (new) | Right-sidebar equipment locker list — see §3.6 |
+| `detail_sidebar.gd` | `%DetailPanel` | Left panel loader — `_View` enum (`EMPTY, AGENT, TEAM, EVENT, RESULT, HQ`) |
+| `slideout_panel.gd` | `%SkillSlideout` | Pop-out loader — `_Mode` enum now `PROFICIENCY, DEPLOY, VEHICLE, EQUIPMENT_INFO, EQUIP_SLOT` |
+| `event_map_labels.gd` | `%EventMapLabels` | Clickable title chips above each event pin |
 
-**Detail views** (each `extends "res://scripts/ui/detail_view_base.gd"` by path — no `class_name`, so no global-class-cache registration needed; the loader `preload()`s each script and calls `.new()`):
-- `detail_view_base.gd` — shared helpers (`_add_title`, `_add_subtitle`, `_add_section`, `_add_info_row`, `_add_prof_rank_row`, `_status_color`, `_status_name_for`)
-- `detail_view_agent.gd` — proficiency rank pips (clickable → slideout), condition, team, supernatural
-- `detail_view_team.gd` — editable name (`LineEdit`), members, cohesion, location/en-route ETA, team proficiency ranks, member list
-- `detail_view_event.gd` — title, urgency, "Deploy Team ›" (placed high, above the fold), satellite mini-map, location, days left, requirement pips, stakes, rewards
-- `detail_view_hq.gd` — vehicles (clickable rows → slideout), squads with location/ETA, Equipment & Base Upgrades placeholders
-- `detail_view_result.gd` — two populate entry points on one shell: `populate_travel_confirmation()` (distance/hours/arrival) and `populate_mission_result()` (outcome, suitability, chance, roll, per-agent outcomes); both take an `on_close: Callable` since returning to the empty state is the loader's job, not the view's
+**Detail views** (`extends "res://scripts/ui/detail_view_base.gd"` by path, no `class_name`):
+- `detail_view_agent.gd` — proficiency rank pips **and now the raw score number** (clickable rows → slideout), a new **Equipment** section (3 clickable slots → equip picker), condition, team, supernatural.
+- `detail_view_team.gd` — editable name, cohesion, location — now with three states (at base / en route / **on mission**, new), team proficiency ranks, members.
+- `detail_view_event.gd` — unchanged.
+- `detail_view_hq.gd` — vehicles (now the primary base's, via `Game.base_manager`), squads (now with an **on mission** state too), **base-local equipment** (was a "Coming soon" placeholder, now real — clickable rows → info slideout), Base Upgrades still a placeholder.
+- `detail_view_result.gd` — unchanged.
 
-**Slideout views** (same by-path pattern, `extends "res://scripts/ui/slideout_view_base.gd"`):
-- `slideout_view_base.gd` — shared `_add_header(title, on_close, color, font_size)` (header row + "✕" wired to a passed-in close callable)
-- `slideout_view_proficiency.gd` — rank pips, category description, per-skill cards with rank pips + tag chips
-- `slideout_view_deploy.gd` — every non-empty squad with match %, availability, distance + travel time + a vehicle dropdown (auto-selects the best fit, overridable), Deploy button
-- `slideout_view_vehicle.gd` — image slot (or placeholder), mode, speed, range, capacity, op cost, description
-
-Clicking the same trigger twice toggles the slideout closed. Views that need to close themselves (Deploy on successful dispatch, Result's Close button) receive the loader's `dismiss`/`show_empty` method as a `Callable` parameter rather than reaching for `%SkillSlideout`/`%DetailPanel` directly — keeps the view scripts decoupled from the loader's internals, only coupled to its public API.
+**Slideout views** (`extends "res://scripts/ui/slideout_view_base.gd"` by path):
+- `slideout_view_proficiency.gd` — rank pips **and the score number**; per-skill cards now read `EquipmentHandler.get_effective_skills()` instead of `agent.skills` directly, so gear-granted/modified skills actually appear here.
+- `slideout_view_deploy.gd` — per-team card now has a third early-return state for `is_on_mission` (previously only handled `is_traveling`), matching text style.
+- `slideout_view_vehicle.gd` — unchanged.
+- `slideout_view_equipment.gd` (new) — read-only item info card (slot, description, requirements, effects, each with `get_description()`).
+- `slideout_view_equip_slot.gd` (new) — the agent-sheet equip/unequip picker.
 
 #### `scripts/debug/debug_driver.gd`
-Raw-keycode harness (matches `GeoscapeController`'s existing pattern; no InputMap actions anywhere in the project):
-
-`1` spawn event · `2` list events · `3` deploy first team to most urgent · `4`/`5` advance 1/7 days · `6` toggle pause · `7` roster · `8` resources · `9` full status · `0` team status · `T` train first team
+Unchanged keys: `1` spawn event · `2` list events · `3` deploy first team to most urgent · `4`/`5` advance 1/7 days · `6` toggle pause · `7` roster · `8` resources · `9` full status · `0` team status · `T` train first team.
 
 ---
 
 ## 5. Signal Map
 
 ```
-GameClock          day_advanced(day) ──┬──► ConcealmentState._on_day_advanced   (decay)
-									   ├──► EventManager._on_day_advanced       (intensity, tick, spawn)
-									   ├──► TeamManager._on_day_advanced        (training, ARRIVALS)
-									   ├──► TopBar._update_date
-									   └──► EventsTab._refresh
-				   pause_changed(paused) ──► TopBar
+GameClock          hour_advanced(hour)
+                   day_advanced(day) ──┬──► ConcealmentState._on_day_advanced   (decay)
+                                       ├──► EventManager._on_day_advanced       (intensity, tick, spawn)
+                                       ├──► TeamManager._on_day_advanced        (training)
+                                       ├──► TopBar._update_date
+                                       └──► EventsTab._refresh
+                   pause_changed(paused) ──► TopBar
 
 ResourceState      funding_changed / intel_changed ──► TopBar
 ConcealmentState   concealment_changed / threshold_crossed / revelation_triggered ──► TopBar
@@ -451,318 +445,245 @@ ConcealmentState   concealment_changed / threshold_crossed / revelation_triggere
 AgentManager       roster_changed / agent_status_changed ──► SquadList, DetailPanel
 
 TeamManager        team_created / team_renamed / membership_changed /
-				   cohesion_changed / training_started / training_completed
-													──► SquadList, DetailPanel
-				   team_departed(team_id)           ──► DetailPanel, TravelPathLayer
-				   team_arrived(team_id, event_id)  ──► EventManager._on_team_arrived  ★
-														DetailPanel, TravelPathLayer
+                   cohesion_changed / training_started / training_completed
+                                                    ──► SquadList, DetailPanel
+                   team_departed(team_id)           ──► DetailPanel, TravelPathLayer
+                   team_arrived(team_id, event_id)  ──► EventManager._on_team_arrived  ★
+                                                         DetailPanel, TravelPathLayer
+                     (now fires after mission_duration_hours elapses on-site,
+                      not on physical arrival — see §3.4/§6)
 
 EventManager       event_spawned  ──► MarkerLayer, EventMapLabels, EventsTab
-				   event_expired  ──► MarkerLayer, EventMapLabels, EventsTab
-				   event_resolved ──► MarkerLayer, EventMapLabels, EventsTab,
-									  DetailPanel._on_mission_resolved (auto mission report)
-				   event_escalated
+                   event_expired  ──► MarkerLayer, EventMapLabels, EventsTab
+                   event_resolved(event, team_name, result: MissionResolutionResult)
+                                  ──► MarkerLayer, EventMapLabels, EventsTab,
+                                      DetailPanel._on_mission_resolved (auto mission report)
+                     (team_name is now its own signal parameter, not smuggled into the
+                      result dict; result is a typed MissionResolutionResult, not a Dictionary)
+                   event_escalated
 
 MarkerLayer        event_marker_clicked(ev) ──► RootUI._on_event_selected
-				   hq_marker_clicked()      ──► RootUI._on_hq_selected
-				   event_marker_added/removed ──► (GeoscapeController detail quad — disabled)
+                   hq_marker_clicked()      ──► RootUI._on_hq_selected
+                   event_marker_added/removed ──► (GeoscapeController detail quad — disabled)
 
 GeoscapeController globe_clicked(pos) ──► MarkerLayer._on_globe_clicked
 
 UI                 SquadList.agent_selected / .team_selected ──► RootUI
-				   EventList.event_selected                  ──► RootUI
-				   EventMapLabels.event_label_clicked        ──► RootUI
+                   EventList.event_selected                  ──► RootUI
+                   EventMapLabels.event_label_clicked        ──► RootUI
 ```
 
-★ **The load-bearing connection.** `TeamManager` doesn't know what a mission is; `EventManager` doesn't own travel. `team_arrived` is the seam between them.
+★ **The load-bearing connection**, now carrying more weight than before: `TeamManager` still doesn't know what a mission is, but it now also owns the on-site *waiting* before this signal fires. `EventManager` didn't need to change at all when that wait was added — proof the seam is in the right place.
 
 ---
 
 ## 6. The Current Game Loop
 
-### Per-day tick (automatic)
+### Per-day / per-hour tick (automatic)
 
 ```
-GameClock accumulates real seconds → seconds_per_day elapsed → day_advanced(n)
+GameClock accumulates real seconds → seconds_per_hour elapsed → hour_advanced(h)
+                                    → every 24th hour also fires → day_advanced(n)
   │
-  ├─ ConcealmentState  : value -= 1.0  (public forgets)
+  ├─ ConcealmentState  : value -= 1.0  (public forgets, on day_advanced)
   │
-  ├─ EventManager      : magic_intensity += 0.02
-  │                      for each ACTIVE event: days_remaining -= 1
-  │                        └─ hits 0 → EXPIRED
-  │                                    + concealment_on_fail
-  │                                    + escalate (if can_escalate) at same city, reqs +1
-  │                      roll spawn: chance = clamp(0.35 × magic_intensity, 0, 0.95)
-  │                        └─ new event at a random city (pop ≥ 50k), reqs scaled by intensity
+  ├─ EventManager      : magic_intensity += 0.02  (on day_advanced)
+  │                      for each ACTIVE event: days_remaining -= 1 → EXPIRED / escalate
+  │                      roll spawn from spawn_templates (chance = clamp(0.35 × intensity, 0, 0.95))
   │
-  └─ TeamManager       : training countdowns
-						 for each traveling team: current_day ≥ arrival_day?
-						   └─ _complete_travel() → team_arrived(team_id, event_id)
+  └─ TeamManager       : training countdowns (on day_advanced)
+                         every frame (_process, sub-day precision):
+                           traveling team, arrival reached?      → _complete_travel()
+                           on-mission team, ready day reached?   → _complete_mission_work()
 ```
 
 ### Player action loop
 
 ```
-1. NOTICE      Event spawns → pin appears with a one-shot white "spawn" ring,
-			   a clickable urgency-coloured chip floats above it,
-			   and it lists in the Events tab (sorted by urgency, then time).
+1. NOTICE      Event spawns → pin, chip, Events tab entry (unchanged).
 
-2. INSPECT     Click pin / chip / list row → DetailPanel EVENT view:
-			   requirement rank pips, satellite mini-map, stakes, rewards,
-			   days remaining.
+2. INSPECT     Click through to DetailPanel EVENT view (unchanged).
 
-3. DISPATCH    "Deploy Team ›" → SkillSlideout DEPLOY mode.
-			   Per squad it shows:
-				 • match %  (compute_team_suitability → rank coverage)
-				 • members available
-				 • distance, travel days, and the auto-selected vehicle
-			   Out of range (>3000 km) or over capacity → button disabled.
+3. DISPATCH    "Deploy Team ›" → SkillSlideout DEPLOY mode. Per squad:
+                 • match % — now MissionResolver.compute_team_suitability(),
+                   a blend of rank coverage and score coverage (§3.6/§4)
+                 • members available, distance, travel time, vehicle
+                   (now sourced from Game.base_manager.get_all_vehicles())
+               A team already is_on_mission elsewhere shows that status
+               and can't be redeployed (same as an is_traveling team).
 
-4. TRAVEL      EventManager.deploy_team()
-				 → event.status = DEPLOYED   (countdown PAUSES)
-				 → TeamManager.begin_travel()
-					 • get_best_vehicle(distance, size)
-					 • members → DEPLOYED
-					 • records return point
-			   DetailPanel shows a "Team Deployed" confirmation
-			   (distance / days / arrival day).
-			   TravelPathLayer draws the arc + a dot that moves smoothly
-			   using get_day_progress().
+4. TRAVEL      EventManager.deploy_team() → event DEPLOYED, TeamManager.begin_travel().
+               DetailPanel shows "Team Deployed"; TravelPathLayer draws the arc.
 
-5. RESOLVE     On arrival day → team_arrived → EventManager._on_team_arrived:
-				 • MissionResolver.resolve()
-					 chance = clamp(0.3 + suitability × 0.4, 0.05, 0.95)
-					 roll ≤ chance×0.6 → success
-					 roll ≤ chance     → partial
-					 else              → failure
-				 • rewards / concealment applied, event status set, event removed
-				 • cohesion +8
-				 • agent outcomes stashed in pending_agent_results  ← NOT applied yet
-				 • begin_return_travel()
-			   DetailPanel auto-pops the Mission Report.
+5. WORK        (New leg.) On arrival, TeamManager checks event.mission_duration_hours.
+               If > 0: team enters is_on_mission instead of resolving immediately.
+               UI shows "On mission at X — Nh left" (squad sheet, HQ squads list,
+               deploy picker) instead of misleadingly showing "at base".
 
-6. RETURN      Arrival home → _complete_travel() applies pending outcomes:
-			   Available / Injured / KIA (KIA = erased from roster, permanently).
-			   Team is unavailable for the WHOLE round trip, not just the outbound leg.
+6. RESOLVE     Once mission_ready_day is reached, team_arrived fires (same signal
+               as before, just later) → EventManager._on_team_arrived:
+                 • resolution_strategy.resolve(event, squad) — today
+                   StatCheckResolutionStrategy: suitability → chance →
+                   roll buckets outcome → per-agent injury/KIA rolls
+                 • _backfill_agent_results() — any squad member the strategy
+                   didn't mention defaults to AVAILABLE (safety net, not a
+                   silent-forever-DEPLOYED bug)
+                 • rewards / concealment applied, event status set
+                 • cohesion +8
+                 • agent outcomes stashed in pending_agent_results ← NOT
+                   applied yet
+                 • begin_return_travel()
+               DetailPanel auto-pops the Mission Report.
+
+7. RETURN      Arrival home → _complete_travel() applies pending outcomes:
+               Available / Injured / KIA (KIA = erased from roster, permanently).
+               Team is unavailable for the WHOLE round trip — travel there,
+               the mission itself, and travel back.
 ```
 
 ### Squad management (parallel, any time)
 
-Drag agents between squads in the Squads tab. Empty squads persist (so you can drag members back in). "+ New Squad" creates an empty one, bypassing MIN_SIZE. Click a squad header → team detail with editable name, cohesion, location/ETA, team proficiency ranks.
+Unchanged.
 
 ### What's missing from the loop
 
-The loop is **complete but thin**: there is no progression, no economy sink, no narrative. Funding and Intel accumulate with nothing to spend them on. Agents never level up. Nothing unlocks. See §11.
+Still thin in the same ways as before: no progression, no economy sink, no narrative. Funding and Intel accumulate with nothing to spend them on beyond equipment sitting in a locker with no acquisition cost. Agents never level up. Cohesion still does nothing. See §11.
 
 ---
 
 ## 7. Coding Conventions & Best Practices
 
-### GDScript style (as established in this codebase)
+Unchanged from the previous version of this document — strict typing, `##` doc comments explaining *why*, section headers, signals at the top, `_private` prefix, `@export` for tunables. Architectural rules 7–13 (managers own state, every mutation emits, constants live with their concept, data classes never touch the scene tree, `call_deferred` batching, wholesale UI rebuild, gate-don't-delete) all still hold and now additionally apply to the Handler layer (§1): handlers compute, they never emit or hold state.
 
-1. **Strict typing everywhere.** `func f(x: int) -> String:`, `var a: Array[AgentData] = []`. Use `:=` inference only when the right-hand type is unambiguous.
-2. **`##` doc comments** on every class and any non-obvious function. Explain *why*, not *what* — the existing comments consistently justify decisions ("Kept separate from ResourceState because…", "deliberately ignores `paused` so…"). Preserve this; it's the main defence against re-litigating past decisions.
-3. **Section headers** in long files:
-   ```gdscript
-   ## ── Identity ────────────────────────────────────────────
-   # =============================================================================
-   # Lifecycle
-   # =============================================================================
-   ```
-4. **Signals declared at the top**, immediately after the class doc comment.
-5. **`_private` prefix** for internal state and helpers. Public API has no prefix.
-6. **`@export` for tunables**, plain `var` for runtime state. Anything a designer might want to tweak should be exported.
+One addition:
 
-### Architectural rules
-
-7. **Managers own state; UI never mutates directly.** UI calls manager methods; managers emit; UI rebuilds.
-8. **Every mutation emits a signal.** If you add a mutator, add or reuse a signal, or UI will silently go stale. *(This exact bug hit the HQ panel — it needed `team_created`/`team_renamed` added.)*
-9. **Constants live with their concept.** `SkillData` owns all proficiency constants; `TeamData` owns size/cohesion limits; `TeamManager` owns HQ location. Never redefine them elsewhere.
-10. **Data classes never touch the scene tree.** No `%Node` inside `scripts/data/`. Anything needing scene access belongs in a manager.
-11. **Batch signal-driven refreshes** with `call_deferred`:
-	```gdscript
-	func _schedule_refresh() -> void:
-		if _refresh_pending: return
-		_refresh_pending = true
-		_refresh_view.call_deferred()
-	```
-	Several signals often fire in one frame; this collapses them into one rebuild.
-12. **Rebuild UI wholesale.** `_clear()` (queue_free all children) then re-add. No incremental patching.
-13. **Gate disabled features behind exported bools** rather than deleting them (`enable_cell_selection`, `enable_detail_view`) — but **null-check every path they touch**, since gating creation means the objects are `null` at runtime.
+16. **New `class_name` scripts need cache registration for headless verification the same way as always** (see §8 gotcha #1) — this project added a *lot* of new `class_name` scripts this pass (every equipment class, `BaseData`/`BaseManager`, `AgentGenerator`/`NameGenerator`, the whole resolution-strategy family). If a headless run reports "Identifier not found" for a class you know exists, check the cache first before assuming a real bug.
 
 ### Verification
 
-14. **Always run the headless parse check after edits:**
-	```bash
-	./Godot_v4.7-stable_win64_console.exe --headless --path . --quit
-	```
-	Expected clean output is:
-	```
-	GeoData loaded: 258 countries, 7342 cities
-	[AgentManager] roster initialized with 4 agents
-	[TeamManager] Alpha Team (4 members, cohesion 0%)
-	```
-	Anything else — `SCRIPT ERROR`, `Parse Error`, `Node not found` — is a real failure.
-15. **Never truncate that output.** Piping through `Select-Object -First N` / `head -N` can hide errors, because PowerShell interleaves native stderr unpredictably. Use `| Out-String` and read all of it. *(This produced a false "clean parse" report once — a genuinely misleading result.)*
+Unchanged commands and expected output shape — `--headless --path . --quit`, never truncate the output. One new environment-specific caveat worth recording:
+
+17. **Headless `--script` runs that instantiate `Node`-derived manager classes directly (e.g. `EventManager.new()`, `AgentManager.new()`) have been unreliable in this environment** — intermittent hangs, seemingly tied to the Godot editor being open on the same project concurrently rather than to the code itself. Prefer testing `RefCounted`/`Resource`-based logic (handlers, data classes) directly, which has been consistently reliable; fall back to the plain `--quit` parse check plus manual playtesting for anything that needs a live manager instance.
 
 ---
 
 ## 8. Gotchas Learned The Hard Way
 
-Each of these cost real debugging time. They are listed so they don't cost it twice.
+All 14 entries from the previous version of this document still apply unchanged. Additions from this pass:
 
 | # | Gotcha | Fix / Rule |
 |---|---|---|
-| 1 | **New `class_name` scripts aren't found in headless runs.** The editor regenerates `.godot/global_script_class_cache.cfg`; headless doesn't. | After adding a `class_name`, either open the editor once or hand-add the entry to the cache file. |
-| 2 | **Stale `[autoload]` entries duplicate managers.** Autoloads live under `/root`, outside `Main`'s owned scene, so their `%`-lookups fail and every manager exists twice. | Managers are scene nodes only. Keep `[autoload]` empty. |
-| 3 | **`%UniqueName` only resolves within the same owned scene.** | Never rely on `%` from an autoload or a separately-instanced scene. |
-| 4 | **Empty `Callable()` in `set_drag_forwarding` breaks drops.** Godot 4.7 appears to treat it as "explicitly refuses" rather than "no handler". | Pass real methods (`_always_deny_drop`, `_noop_drop`). |
-| 5 | **`MOUSE_FILTER_STOP` blocks `can_drop_data` propagation.** | Use `MOUSE_FILTER_PASS` on drag containers, `IGNORE` on their decorative children. |
-| 6 | **Type inference fails on untyped returns.** `var x := %TeamManager.begin_travel(...)` → *"Cannot infer the type"*, because `%TeamManager` is an untyped `Node`. | Annotate explicitly: `var x: Dictionary = %TeamManager...`. This bit twice. |
-| 7 | **`@export_file` takes separate arguments.** `@export_file("*.png,*.jpg")` errors; `@export_file("*.png", "*.jpg")` is correct. | |
-| 8 | **Changing `seconds_per_day` without rescaling `_accum` teleports the sun.** `get_day_progress()` is `_accum / seconds_per_day` — changing the denominator alone jumps the fraction. | `set_speed()` preserves progress by rescaling `_accum`. Any future time manipulation must do the same. |
-| 9 | **Don't read shader parameters as a data source.** Reading `flatten` back off the material was fragile and silently failed on the flat map. | Expose a getter (`GeoscapeController.get_flatten_amount()`). Shader params are for rendering, one-way. |
-| 10 | **Markers clip into height-displaced terrain.** The small `SURFACE_OFFSET` isn't enough over mountains. | `depth_test_disabled` in `marker.gdshader`. Safe *only* because far-side hiding is done CPU-side (`is_facing_camera`), not by depth. Applying the same to travel paths would let them show through the globe — don't, without adding a visibility check. |
-| 11 | **Gating feature creation leaves nulls behind.** Disabling `enable_detail_view` skipped `_create_detail_view()`, but `_on_globe_clicked` still assigned `_detail_mesh.visible` → crash on click. | When gating a feature off, audit *every* reference, not just the constructor. |
-| 12 | **Children `_ready()` before parents.** `MarkerLayer` (under `Globe`) readies before `Main` assigns `camera`. | Resolve such references lazily (`_get_camera()`), or give the target a unique name and use `%`. |
-| 13 | **Marker↔shader math must stay in sync.** `SurfaceMarker._reposition()` replicates `geoscape.gdshader`'s two-stage unfold. | Change one, change the other, or pins drift off the coastlines. |
-| 14 | **UID warnings on `.tscn` ext_resources are harmless.** `invalid UID … using text path instead` appears when a script is created outside the editor. | Cosmetic. The editor rewrites them on next save. |
+| 15 | **`Resource.duplicate()` doesn't reliably isolate `PackedStringArray` export fields from copy-on-write sharing.** Mutating a `var t := dup.some_packed_array; t.append(x); dup.some_packed_array = t` pattern can still mutate the *original* Resource's array, even though `dup` and the original are genuinely different instances (confirmed: a plain `int` field duplicates and isolates correctly; a `PackedStringArray` field did not, in this Godot 4.7 build). | Build the new array from scratch (`PackedStringArray()` + append each element read from the *original*) instead of deriving it from a `.duplicate()`d property. See `EffectModifySkill.apply_to_skills()`. |
+| 16 | **`%`-lookups fail from any dynamically-created node** (`Control.new()` + `add_child()`), because `add_child()` alone never assigns `owner`, and `%` resolves by walking the `owner` chain. | Use the `Game` autoload registry (§1) instead for anything a dynamically-built view needs to reach. |
+| 17 | **Godot autoloads aren't resolvable as bare identifiers from a standalone `--script` `SceneTree` run** — `Identifier not found: Game` even though the project's `[autoload]` entry is correct and the game runs fine normally. | Use `get_tree().get_root().get_node("Game")` in headless test scripts instead of the bare `Game` identifier — though see gotcha above (#17 in §7) about broader instability testing manager classes this way. |
 
 ---
 
 ## 9. Divergences From The Original GDD
 
-`concurrence_gdd.md` predates several implemented decisions. Where they conflict, **the code is correct** and the old GDD should be read as historical intent.
+All entries from the previous version still hold, plus:
 
 | Original GDD says | Reality |
 |---|---|
-| Five skills: Combat, Stealth, Arcane, Diplomacy, Tech | **Six Proficiencies** (Combat, Subterfuge, Attunement, Erudition, Influence, Ingenuity), *derived from tagged skills*, not set directly. Note Combat survives the rename but is now a *derived* proficiency, not a directly-set skill |
-| Skill requirements as 0–200 values | **Proficiency ranks 0–10** (UI caps display at 5) |
-| "Suitability rating" per agent | Team ranks = **best individual rank per proficiency**; suitability = mean coverage ratio |
-| Events resolve on assignment | **Events resolve on arrival** after real travel time; teams then fly home before becoming available |
-| Agents deploy to events directly | Agents belong to **persistent squads** (`TeamData`) with cohesion; squads deploy |
-| Milestone 1 checklist unchecked | Milestone 1 is **substantially complete** — see below |
-| No mention of vehicles/bases | **HQ in Berlin + a vehicle fleet** with range/speed/capacity gating exist |
+| (not mentioned) | **Mission resolution is a swappable Strategy pattern**, not a single hardcoded function. The current math is unchanged in substance, just relocated behind `MissionResolutionStrategy` |
+| (not mentioned) | **Agents are procedurally generated** (Specialist/Generalist archetypes, generated names), not a fixed hand-authored roster |
+| (not mentioned) | **Equipment is a real, composable system** — requirements and effects assembled from independent Resources in the Inspector, not a design gap |
+| (not mentioned) | **Missions take real time on-site**, not just travel time — a third leg between arrival and resolution |
+| No mention of vehicles/bases | HQ + a vehicle fleet exist, and are now owned by a `BaseManager` designed (but not yet used) for multiple bases |
 
-**Milestone 1 actual status:**
-
-- [x] Event data structure
-- [x] Event spawner at real city locations
-- [x] Event markers (clickable, urgency-coloured, spawn-highlight, map labels)
-- [x] Agent data structure
-- [x] Starting roster of 4 agents with distinct profiles
-- [x] Event detail panel with requirements
-- [x] Stat-based resolution
-- [x] Outcome feedback (mission report, concealment, rewards)
-- [x] Concealment meter with decay and thresholds
-- [x] Day counter with adjustable speed
-- [x] Pause
-- [x] *(beyond scope)* Squads, cohesion, training, drag-and-drop roster management
-- [x] *(beyond scope)* Travel time, vehicles, HQ, travel path visualisation
-- [ ] Assign/unassign **individual agents** to an event — superseded by squad deployment
+Milestone 1 checklist unchanged from the previous version — still substantially complete, same items checked.
 
 ---
 
 ## 10. Known Gaps & Tech Debt
 
 **Dead or orphaned code**
-- `TeamData.compute_effective_skills()` — no callers. **Cohesion currently has no effect on mission outcomes at all**, which is a real gameplay hole: you can build it up via missions and training and it does nothing. Highest-value cleanup.
-- `AgentData.get_effective_scores(counter_tags)` — no callers. **Counter-tags are therefore entirely inert**, despite being modelled on both skills and events.
-- `AgentData.get_proficiency_scores()` / `get_skills()` — only used by `get_primary_proficiency()` and debug printing.
-- `EventManager.resolve_event_solo()` — unused by UI.
-- `EventData.assigned_agent_ids` — never populated (squads replaced it).
-- `EventData` decision fields — scaffolding only.
+- `TeamData.compute_effective_skills()` — still no callers. **Cohesion still has no effect on mission outcomes**, despite the "teamwork" pooling experiment landing in `MissionResolver` — that's a different mechanic (skill pooling across teammates), not cohesion. Still the highest-value cleanup/wiring task.
+- `AgentData.get_effective_scores(counter_tags)` and `SkillHandler.is_countered_by()` — still no callers in the resolution path. **`EventData.counter_tags` is therefore still entirely inert** — note this is now a *different* mechanism from the newer, working `SkillTagModifier`/`tags` system (§3.1), which achieves a related but not identical effect (rank shifts, not binary negation) and *is* wired in.
+- `EventManager.resolve_event_solo()` — still unused by UI.
+- `AgentData.compute_suitability(event)` — still dead code, rank-only, not updated to match the newer blended suitability formula (harmless since nothing calls it).
+- `EventData.assigned_agent_ids` — never populated.
+- `EventData` decision fields — still scaffolding only.
+- A leftover empty, scriptless `"Game"` Node still sits in `Main.tscn` from before the registry became an autoload (§1) — dead, not yet removed.
 
 **Balance issues**
-- `RANK_THRESHOLDS` tiers 6 and 7 are identical → **rank 6 is unreachable**.
-- Injury/KIA rates are unvalidated guesses (5%/15%/15–50%, KIA = injury × 0.2).
-- `magic_intensity` growth (+0.02/day) means requirement bumps every 50 days — untested at length.
+- `RANK_THRESHOLDS` tiers 6 and 7 are still identical → rank 6 still unreachable. Unfixed.
+- Injury/KIA rates still unvalidated guesses.
+- The "teamwork" skill-pooling model and the rank/score suitability blend are both **explicitly marked experimental** in code comments — least playtested of everything here. Pooling scales with team size and same-proficiency headcount; could climb faster than intended for a same-specialty squad.
+- Only 1 of 7 event templates and 1 equipment item are actually wired into their respective Inspector arrays right now — most of what's described as "the catalog" exists on disk but isn't live in a fresh playthrough until dragged in.
 
 **Systems intentionally missing**
-- No vehicle scheduling/exclusivity — two squads could "use" the single helicopter simultaneously.
-- `operation_cost` is displayed but never charged.
-- No save/load. **Nothing persists.**
-- Agents never gain XP or level (`experience`/`level` exist, never change; `level` *is* read by the unused `compute_effective_skills`).
+- No vehicle/equipment scheduling or exclusivity — pooled across all bases with no ownership checks.
+- `operation_cost` still displayed, never charged.
+- No save/load.
+- Agents never gain XP or level.
 - `morale` never changes.
-- Equipment slots are inert strings.
+- `magical_item_slot` is still an inert string (the only one of the four original slots not covered by the new equipment system).
+- No multi-base gameplay yet — `BaseManager` is ready for it, nothing uses it (§3.7).
 
 **Untested / unverified**
-- Everything visual was verified only by headless parse, not by eye: travel arc rendering during unfold, HQ diamond proportions, chip readability, spawn-ring timing.
-- Long-run behaviour (50+ days) has never been observed.
+- Everything visual still verified only by headless parse plus occasional manual spot-checks, not systematic playtesting.
+- Long-run behavior (50+ days) still never observed.
+- The mission-duration state machine (§3.4) has only been verified by code tracing and a clean headless parse — deeper functional headless testing was unreliable in this environment (§7); worth a manual playtest pass.
 
 ---
 
 ## 11. Roadmap To A Playable Slice
 
-**Target:** 45–60 minutes of play with real decisions, visible progression, and an arc — i.e. Act 1 as a self-contained experience.
-
-The ordering below is chosen so each phase makes the *existing* loop better before adding surface area.
+**Target:** unchanged — 45–60 minutes of play with real decisions, visible progression, an arc.
 
 ### Phase A — Make existing systems matter *(highest value per effort)*
 
-The loop works but several built systems are inert. Fix that before building anything new.
-
-1. **Cohesion affects outcomes.** Re-wire `TeamData.compute_effective_skills()` (or a rank-space equivalent) into `MissionResolver`. Simplest version: cohesion adds a flat bonus to `compute_team_suitability`. Makes training and squad stability meaningful.
-2. **Counter-tags do something.** Route `counter_tags` into the rank path — e.g. exclude countered skills before `compute_proficiency_rank`. Give 2–3 event templates real counter-tags. Instantly creates "wrong team for this job" decisions.
-3. **Charge `operation_cost`.** Deduct funding in `begin_travel`; refuse if unaffordable. Gives funding its first sink.
+1. **Cohesion affects outcomes.** Still open — same task as before, now with an equipment/tag-modifier precedent to follow: give `EquipmentHandler`-style treatment to cohesion, or add it as another `apply_to_ranks`-style adjustment in `MissionResolver`.
+2. **Counter-tags do something**, or are formally retired in favor of the tag-modifier system that now does something similar. Worth a deliberate decision rather than leaving both half-alive.
+3. **Charge `operation_cost` and equipment acquisition cost.** Two economy sinks now exist in the data model (vehicles, equipment) with no cost gate on either.
 4. **Fix the rank-6 threshold gap.**
-5. **Agent XP and levelling.** Award XP on mission completion; level-up grants a skill rank. This is the main progression fantasy and it's currently absent.
+5. **Agent XP and levelling.** Still absent, still the main missing progression fantasy.
 
 ### Phase B — Economy and progression
 
-6. **Hire pool.** Rotating recruits, cost funding. Needs a Recruit tab. Makes permadeath survivable and roster-building a real decision.
-7. **Research system (minimal).** One project at a time, costs intel + days, unlocks: a second vehicle, +1 proficiency rank in a category, or a concealment reducer. Even 6–8 nodes gives the game a spine.
-8. **Vehicle progression.** A second vehicle unlocked by research — longer range is the natural first upgrade, since range is currently the hardest wall.
+6. **Hire pool**, now with `AgentGenerator` already built as the generation engine — this is mostly a UI + funding-cost task, not a new generation system.
+7. **Research system.**
+8. **Vehicle and equipment acquisition.** Both now have a real data model (`BaseData.vehicles`/`local_equipment`, `BaseManager.global_equipment`) with no way to *add* to it except the Inspector.
 
 ### Phase C — Narrative texture
 
-9. **Decision events.** The data model already exists (`is_decision_event`, `decision_prompt`, `decision_option_*`). Pause the clock, show 2–4 choices, apply concealment/funding consequences. Even 5 hand-written ones transform tone.
-10. **Concealment threshold events.** 25/50/75 currently just print. Fire actual decision events ("a journalist has footage").
-11. **Event flavour text.** `description`/`summary` are unused. Region- and type-specific text makes events feel authored rather than procedural.
+9–11. Unchanged: decision events, concealment threshold events, event flavor text.
 
 ### Phase D — Slice completion
 
-12. **Save/load.** Everything is `Resource`-based, so `ResourceSaver`/`ConfigFile` is tractable — but travel state and pending results need care.
-13. **Onboarding.** First 3 days scripted: a guaranteed easy nearby event, tooltips on the deploy flow.
-14. **A slice ending.** Reaching concealment 100 *or* surviving 60 days ends the slice with an epilogue card. Gives the session shape.
-15. **Balance pass.** Play 5 full sessions; tune spawn rate, intensity growth, injury rates, funding flow.
+12–15. Unchanged: save/load, onboarding, a slice ending, a balance pass — now with more to balance (mission duration, teamwork pooling, score/rank blend weight).
 
 ### Deliberately deferred
 
-Act 2–5 systems, factions, base building, tactical combat, mirror worlds. The slice is Act 1 only.
+Act 2–5 systems, factions, tactical combat, mirror worlds, and now explicitly: **real multi-base gameplay** (§3.7) — the data model is ready, the decision to build actual base-founding/home-base-assignment gameplay was deliberately deferred this pass.
 
 ---
 
 ## 12. Expanded Features (Discussed, Not Built)
 
-Captured from design conversation so they aren't lost. **None of these are specced — each needs a design pass before implementation.**
+Two items from the previous version of this list have moved to **built** (equipment — §3.6; base management's data-model half — §3.7) and are removed from here. Remaining:
 
 ### Fast travel between fixed bases
-Unlockable relatively early. Instant or near-instant movement between owned/allied bases, turning the base network into a logistics puzzle: a distant base extends effective reach far beyond the helicopter's 3000 km.
-
-*Open questions:* How are bases acquired — research, funding, faction reputation? Does fast travel cost funding per use? Is it instant or 1 day? Does it need a vehicle at all?
+Now has a real foundation to build on (`BaseManager`/`BaseData` exist), but the actual gameplay — founding/acquiring a second base, fast-travel mechanics between them — is unbuilt. Same open questions as before: acquisition method, cost per use, instant vs. timed.
 
 ### Teleportation
-`VehicleData.Mode.TELEPORT` already exists as a seam (instant, `max_range_km` per jump, `cooldown_days`) but is entirely unused. Design intent: powerful but rationed — a limited-range, cooldown-gated jump that solves emergencies rather than routine travel.
-
-*Discussed extension:* the dispatch screen should **automatically route via the nearest teleport pad when that's faster**, combining fast travel + conventional transport into one computed plan. This makes `get_best_vehicle()` a multi-leg **route planner** rather than a single-vehicle chooser — a significant rewrite, worth designing carefully.
+Unchanged — `VehicleData.Mode.TELEPORT` still an unused seam.
 
 ### Expanded vehicle fleet
-Progression from helicopter → magical vehicles → teleport pads. Each is a `VehicleData` preset; the auto-selection logic already handles a fleet of any size. Vehicles have an image slot in the UI awaiting art.
+Unchanged in substance; now naturally scoped per-base rather than per-org, which changes "progression" framing slightly — a second base could come with (or need) its own vehicle rather than sharing one global fleet.
 
-*Not yet handled:* vehicle scheduling/exclusivity (one airframe, one mission at a time), maintenance, per-vehicle crew limits beyond `capacity`.
-
-### Base management
-The HQ panel already has **Equipment** and **Base Upgrades** sections stubbed as "Coming soon". The original GDD frames base building as Act 4 content, but a light version (a few HQ upgrades: faster research, larger hire pool, extended vehicle range) would give funding a sink much earlier.
-
-### Equipment
-Four slots exist on `AgentData` as inert strings. Needs an item data type, an inventory, and a modifier hook in `MissionResolver`.
+### Base management (gameplay half)
+The data model exists (§3.7); the HQ panel's Equipment section is now real (§3.6), Base Upgrades is still a placeholder. Founding/upgrading additional bases is unbuilt.
 
 ### Supernatural synergies
-`MissionResolver._compute_synergy_bonus()` is stubbed at `0.0` with the Seer+Shadow ambush example from the GDD. The extension point is ready; the design isn't.
+Unchanged — `MissionResolver._compute_synergy_bonus()` still stubbed at `0.0`. Note the newer equipment/tag-modifier systems are adjacent but distinct extension points that could inform how this eventually gets built.
 
 ### Multi-leg / relay travel
-Implied by the range wall: refuelling stops, forward staging, or dropping a team at an allied base. Currently a hard cutoff instead.
+Unchanged — still a hard range cutoff, not staged travel.
+
+### Awakened skill catalog
+New item: `AgentGenerator` only produces mundane agents because there's no skill catalog for any `SupernaturalType` other than `NONE`. Building one (and deciding how Awakened agents should generate differently) is a natural next step once mundane content feels complete.
 
 ---
 
@@ -786,7 +707,10 @@ Implied by the range wall: refuelling stops, forward staging, or dropping a team
 | Max cohesion bonus | `team_data.gd` | +50% |
 | Mission / training cohesion | `team_manager.gd` | +8 / +12 |
 | Training duration | `team_manager.gd` | 2 days |
-| HQ location | `team_manager.gd` | Berlin (13.405, 52.52) |
-| Vehicle speed / range / capacity | `vehicle_data.gd` | 2400 km/day / 3000 km / 8 |
+| Starting roster size / generalist ratio | `agent_manager.gd` | 4 / 60% |
+| HQ location | `base_manager.gd` (seeded default) | Berlin (13.405, 52.52) |
+| Vehicle speed / range / capacity | `data/vehicles/eurocopter_h225.tres` | 320 km/h / 3000 km / 8 |
 | Skill rank scale | `skill_data.gd` | ×20 |
 | Visible max proficiency rank | `skill_data.gd` | 5 (of 10) |
+| Suitability score-vs-rank weight | `mission_resolver.gd` | 20% score / 80% rank |
+| Default mission duration | `event_data.gd` | 2.0 hours |
