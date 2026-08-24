@@ -30,11 +30,14 @@ static func compute_rank_coverage(agent_ranks: Dictionary, event: EventData) -> 
 ## Best proficiency ranks across all members — the team's combined rank
 ## in each proficiency is the highest individual rank among its members.
 ## Works the same for a solo agent (a 1-member array reduces to that
-## agent's own ranks).
-static func compute_team_ranks(members: Array[AgentData]) -> Dictionary:
+## agent's own ranks). Pass active_tags (typically the event's own tags)
+## to recalculate each member's ranks under that context first — see
+## SkillHandler.compute_effective_rank.
+static func compute_team_ranks(members: Array[AgentData],
+		active_tags: PackedStringArray = PackedStringArray()) -> Dictionary:
 	var best := SkillHandler.empty_rank_dict()
 	for m: AgentData in members:
-		var ranks := m.get_proficiency_ranks()
+		var ranks := m.get_proficiency_ranks(active_tags)
 		for key: String in SkillData.PROFICIENCY_KEYS:
 			if ranks[key] > best[key]:
 				best[key] = ranks[key]
@@ -44,7 +47,7 @@ static func compute_team_ranks(members: Array[AgentData]) -> Dictionary:
 static func compute_team_suitability(event: EventData, members: Array[AgentData]) -> float:
 	if members.is_empty():
 		return 0.0
-	return compute_rank_coverage(compute_team_ranks(members), event) + _compute_synergy_bonus(members)
+	return compute_rank_coverage(compute_team_ranks(members, event.tags), event) + _compute_synergy_bonus(members)
 
 
 static func _compute_synergy_bonus(_members: Array[AgentData]) -> float:

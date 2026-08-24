@@ -1,0 +1,9 @@
+[gd_resource type="Resource" script_class="SkillTagModifier" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/skill_tag_modifier.gd" id="1_tagmod"]
+
+[resource]
+script = ExtResource("1_tagmod")
+trigger_tag = "fragile"
+affects_tag = "Explosive"
+rank_delta = -1

@@ -96,7 +96,14 @@ func get_effective_scores(counter_tags: PackedStringArray) -> Dictionary:
 func get_skills() -> Dictionary:
 	return get_proficiency_scores()
 
-func get_proficiency_ranks() -> Dictionary:
+## Proficiency ranks derived from this agent's skills. Pass active_tags
+## (typically an event's tags) to recalculate under that context — a skill
+## tagged e.g. [Explosive] can rank lower or higher than its sheet value
+## depending on which tag_modifiers rules match, which can shift which
+## Proficiency rank the category as a whole reaches. Callable again at any
+## time with a different active_tags set (e.g. mid-mission, if an
+## encounter phase changes what's active) — omit it for the base ranks.
+func get_proficiency_ranks(active_tags: PackedStringArray = PackedStringArray()) -> Dictionary:
 	var by_key: Dictionary = {}
 	for key: String in SkillData.PROFICIENCY_KEYS:
 		by_key[key] = [] as Array[SkillData]
@@ -104,7 +111,7 @@ func get_proficiency_ranks() -> Dictionary:
 		by_key[skill.get_proficiency_key()].append(skill)
 	var ranks := SkillHandler.empty_rank_dict()
 	for key: String in SkillData.PROFICIENCY_KEYS:
-		ranks[key] = SkillHandler.compute_proficiency_rank(by_key[key])
+		ranks[key] = SkillHandler.compute_proficiency_rank(by_key[key], active_tags)
 	return ranks
 
 func get_primary_proficiency() -> String:
@@ -141,4 +148,4 @@ func is_available() -> bool:
 	return status == Status.AVAILABLE
 
 func compute_suitability(event: EventData) -> float:
-	return MissionResolver.compute_rank_coverage(get_proficiency_ranks(), event)
+	return MissionResolver.compute_rank_coverage(get_proficiency_ranks(event.tags), event)
