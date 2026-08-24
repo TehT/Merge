@@ -62,8 +62,8 @@ func _maybe_spawn_event() -> void:
 		spawn_random_event()
 
 func spawn_random_event(template_override: EventData = null) -> EventData:
-	if spawn_templates.size() == 0:
-		return
+	if template_override == null and spawn_templates.is_empty():
+		return null
 	var tmpl: EventData = template_override if template_override != null \
 		else spawn_templates[randi() % spawn_templates.size()]
 
@@ -115,10 +115,12 @@ func _handle_expiration(event: EventData) -> void:
 		_spawn_escalation(event)
 
 func _spawn_escalation(parent: EventData) -> void:
-	if escalation_templates.size() == 0:
-		return;
+	if escalation_templates.is_empty():
+		return
 	var tmpl := _find_template_for_type(parent.escalates_to)
 	var child := spawn_random_event(tmpl)
+	if child == null:
+		return
 	child.location_city = parent.location_city
 	child.location_country = parent.location_country
 	child.geo_coordinates = parent.geo_coordinates
@@ -245,4 +247,4 @@ func _find_template_for_type(event_type: EventData.EventType) -> EventData:
 	for tmpl: EventData in escalation_templates:
 		if tmpl.event_type == event_type:
 			return tmpl
-	return spawn_templates[0]
+	return spawn_templates[0] if not spawn_templates.is_empty() else null
