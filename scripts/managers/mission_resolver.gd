@@ -104,13 +104,158 @@ static func compute_score_coverage(team_scores: Dictionary, event: EventData) ->
 const SCORE_WEIGHT: float = 0.2
 
 
+## Same computation as compute_team_suitability(), but also returns a
+## human-readable trace of the rank/score coverage breakdown per required
+## category — for callers (resolution strategies) that want to surface
+## *why* a suitability number came out the way it did.
+## compute_team_suitability() is a thin wrapper around this that just
+## discards the log, for callers (e.g. the deploy screen's match%
+## preview) that only want the number.
+static func compute_team_suitability_explained(event: EventData, members: Array[AgentData]) -> Dictionary:
+	if members.is_empty():
+		return {"suitability": 0.0, "log": PackedStringArray()}
+
+	var team_ranks := compute_team_ranks(members, event.tags)
+	var team_scores := compute_team_scores(members)
+	var rank_coverage := compute_rank_coverage(team_ranks, event)
+	var score_coverage := compute_score_coverage(team_scores, event)
+	var synergy := _compute_synergy_bonus(members)
+	var suitability := lerpf(rank_coverage, score_coverage, SCORE_WEIGHT) + synergy
+
+	var log: PackedStringArray = []
+	var reqs := event.get_proficiency_requirements()
+	for key: String in SkillData.PROFICIENCY_KEYS:
+		var req: int = reqs.get(key, 0)
+		if req <= 0:
+			continue
+		log.append("  %s: team rank %d/%d, score %.0f/%.0f" % [
+			key.capitalize(), team_ranks[key], req, team_scores[key], float(req) * float(SkillData.RANK_SCALE),
+		])
+	log.append("Rank coverage %.2f, score coverage %.2f (blended %d%% score) -> suitability %.2f" % [
+		rank_coverage, score_coverage, int(SCORE_WEIGHT * 100.0), suitability,
+	])
+	return {"suitability": suitability, "log": log}
+
+
 static func compute_team_suitability(event: EventData, members: Array[AgentData]) -> float:
 	if members.is_empty():
 		return 0.0
-	var rank_coverage := compute_rank_coverage(compute_team_ranks(members, event.tags), event)
-	var score_coverage := compute_score_coverage(compute_team_scores(members), event)
-	return lerpf(rank_coverage, score_coverage, SCORE_WEIGHT) + _compute_synergy_bonus(members)
+	return compute_team_suitability_explained(event, members)["suitability"]
 
 
 static func _compute_synergy_bonus(_members: Array[AgentData]) -> float:
 	return 0.0
+
+
+## Coverage using arbitrary continuous per-category values against
+## explicit per-category targets — for strategies whose aggregation isn't
+## the standard RANK_THRESHOLDS tier walk and whose target isn't
+## necessarily req_* itself (e.g. TagBreadthResolutionStrategy's totaled
+## tag-weighted values against EventData.get_target_values()). A category
+## only counts if the event still requires it (req_* > 0 — that field
+## stays the single source of truth for "is this category in play at
+## all") and has a resolvable (>0) target. Same shape/clamping as
+## compute_rank_coverage, just float-safe (compute_rank_coverage
+## truncates its dict's values to int, which would silently lose
+## precision here).
+static func compute_value_coverage(values: Dictionary, targets: Dictionary, event: EventData) -> float:
+	var reqs := event.get_proficiency_requirements()
+	var req_count := 0
+	var coverage_sum := 0.0
+
+	for key: String in reqs:
+		var req: int = reqs[key]
+		if req <= 0:
+			continue
+		var target: float = targets.get(key, 0.0)
+		if target <= 0.0:
+			continue
+		req_count += 1
+		var value: float = values.get(key, 0.0)
+		coverage_sum += clampf(value / target, 0.0, 2.0)
+
+	if req_count == 0:
+		return 1.0
+	return coverage_sum / float(req_count)
+
+
+## Turns an already-computed suitability float into a full resolution
+## result: success chance, outcome bucket, and per-agent injury/KIA rolls.
+## Factored out of StatCheckResolutionStrategy so multiple
+## MissionResolutionStrategy implementations can share the same
+## "suitability -> dice" math while computing suitability itself in
+## entirely different ways. log_lines, if given, is whatever trace the
+## caller already built while computing suitability (see
+## compute_team_suitability_explained) — this appends the chance/roll/
+## outcome and per-agent-roll lines on top and returns the combined log
+## on the result. Duplicates log_lines before appending rather than
+## mutating the caller's array in place — plain GDScript parameter
+## passing doesn't isolate PackedStringArray the way it would an Array;
+## .append() on the parameter is visible to the caller's own variable too
+## unless duplicated first (a broader case of the same copy-on-write
+## surprise as Resource.duplicate() — see EffectModifySkill).
+## chance_multiplier, if not 1.0, is applied to chance before the roll
+## happens (not after — a caller wanting to penalize an unmet hard
+## prerequisite, see TagBreadthResolutionStrategy.missing_prereq_penalty,
+## needs the roll itself to see the penalized chance, not just the
+## displayed number).
+static func resolve_from_suitability(suitability: float, squad: Array[AgentData],
+		log_lines: PackedStringArray = PackedStringArray(), chance_multiplier: float = 1.0) -> MissionResolutionResult:
+	var log := log_lines.duplicate()
+	var chance: float = clampf(0.3 + suitability * 0.4, 0.05, 0.95)
+	if not is_equal_approx(chance_multiplier, 1.0):
+		var pre_penalty_chance := chance
+		chance = clampf(chance * chance_multiplier, 0.05, 0.95)
+		log.append("Prereq penalty x%.2f: chance %d%% -> %d%%" % [
+			chance_multiplier, int(round(pre_penalty_chance * 100.0)), int(round(chance * 100.0)),
+		])
+	var roll := randf()
+
+	var outcome: MissionResolutionResult.Outcome
+	if roll <= chance * 0.6:
+		outcome = MissionResolutionResult.Outcome.SUCCESS
+	elif roll <= chance:
+		outcome = MissionResolutionResult.Outcome.PARTIAL
+	else:
+		outcome = MissionResolutionResult.Outcome.FAILURE
+
+	log.append("Chance %d%%, roll %.2f -> %s" % [
+		int(round(chance * 100.0)), roll, MissionResolutionResult.outcome_name(outcome).capitalize(),
+	])
+
+	var badness: float = clampf((roll - chance) / maxf(0.0001, 1.0 - chance), 0.0, 1.0)
+	var injury_chance: float
+	match outcome:
+		MissionResolutionResult.Outcome.SUCCESS: injury_chance = 0.05
+		MissionResolutionResult.Outcome.PARTIAL: injury_chance = 0.15
+		_: injury_chance = lerpf(0.15, 0.5, badness)
+	var kia_chance := injury_chance * 0.2
+
+	var agent_results := {}
+	for member in squad:
+		var r := randf()
+		var status: AgentData.Status
+		if r < kia_chance:
+			status = AgentData.Status.KIA
+		elif r < injury_chance:
+			status = AgentData.Status.INJURED
+		else:
+			status = AgentData.Status.AVAILABLE
+		agent_results[member.id] = status
+		log.append("  %s: roll %.2f -> %s" % [member.agent_name, r, _status_log_name(status)])
+
+	var result := MissionResolutionResult.new()
+	result.outcome = outcome
+	result.roll = roll
+	result.chance = chance
+	result.team_suitability = suitability
+	result.agent_results = agent_results
+	result.log_lines = log
+	return result
+
+
+static func _status_log_name(status: AgentData.Status) -> String:
+	match status:
+		AgentData.Status.KIA: return "KIA"
+		AgentData.Status.INJURED: return "Injured"
+		_: return "Available"

@@ -36,6 +36,17 @@ func populate_mission_result(team_name: String, ev_title: String, result: Missio
 	_add_info_row("Chance", "%d%%" % int(round(float(result.chance) * 100.0)))
 	_add_info_row("Roll", "%.2f" % result.roll)
 
+	if not result.log_lines.is_empty():
+		add_child(HSeparator.new())
+		_add_section("Resolution Details")
+		for line: String in result.log_lines:
+			var line_lbl := Label.new()
+			line_lbl.text = line
+			line_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			line_lbl.add_theme_font_size_override("font_size", 11)
+			line_lbl.add_theme_color_override("font_color", Color(0.55, 0.55, 0.6, 1.0))
+			add_child(line_lbl)
+
 	add_child(HSeparator.new())
 	_add_section("Agent Outcomes")
 	var agent_results: Dictionary = result.agent_results

@@ -191,6 +191,7 @@ func _on_team_arrived(team_id: String, event_id: String) -> void:
 		team.team_name, event.title, MissionResolutionResult.outcome_name(result.outcome),
 		result.team_suitability, result.chance, result.roll,
 	])
+	_print_resolution_log(result)
 
 func resolve_event_solo(event_id: String, agent_id: String) -> MissionResolutionResult:
 	var event := get_event_by_id(event_id)
@@ -212,7 +213,16 @@ func resolve_event_solo(event_id: String, agent_id: String) -> MissionResolution
 		agent.agent_name, event.title, MissionResolutionResult.outcome_name(result.outcome),
 		result.team_suitability, result.chance, result.roll,
 	])
+	_print_resolution_log(result)
 	return result
+
+## Prints whatever trace the resolution strategy left on the result (see
+## MissionResolutionResult.log_lines) — the detailed "why", underneath
+## the one-line summary every strategy already gets. A strategy that
+## doesn't populate a log just prints nothing extra here.
+func _print_resolution_log(result: MissionResolutionResult) -> void:
+	for line: String in result.log_lines:
+		print("    " + line)
 
 ## Fills in AVAILABLE for any squad member a resolution strategy left out
 ## of agent_results. Strategies are a Strategy-pattern black box (see

@@ -1,15 +1,13 @@
-[gd_resource type="Resource" script_class="EventData" format=3]
+[gd_resource type="Resource" script_class="EventData" format=3 uid="uid://crtowpara5a43"]
 
-[ext_resource type="Script" path="res://scripts/data/event_data.gd" id="1_evtdata"]
+[ext_resource type="Script" uid="uid://bg7rrc2upqgsv" path="res://scripts/data/event_data.gd" id="1_evtdata"]
 
 [resource]
 script = ExtResource("1_evtdata")
-event_type = 1
-urgency = 1
-time_limit_days = 3
+mission_duration_hours = 6.0
 req_attunement = 2
 req_erudition = 1
 req_ingenuity = 1
-can_escalate = true
+tags = ["[arcane]"]
 escalates_to = 3
-escalation_rank_bump = 1
+can_escalate = true

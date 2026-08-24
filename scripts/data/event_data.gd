@@ -56,8 +56,13 @@ var days_remaining: int = 3
 
 ## ── Proficiency Requirements ───────────────────────────────────────────────
 ## Each value is a required proficiency rank (0-10). 0 means that
-## proficiency is irrelevant. Compared against agent/team proficiency
-## ranks to calculate suitability.
+## proficiency is irrelevant. This is the HARD PREREQUISITE — a gate
+## checked against a team's actual aggregated rank, not a ratio target.
+## StatCheckResolutionStrategy still uses it as its ratio denominator too
+## (rank / req); TagBreadthResolutionStrategy uses it only as the gate and
+## compares its own continuous totals against target_* below instead —
+## see TagBreadthResolutionStrategy.missing_prereq_penalty for what
+## happens when a required category's rank doesn't clear this.
 
 @export_group("Proficiency Requirements")
 @export_range(0, 10) var req_combat: int = 0
@@ -66,6 +71,23 @@ var days_remaining: int = 3
 @export_range(0, 10) var req_erudition: int = 0
 @export_range(0, 10) var req_influence: int = 0
 @export_range(0, 10) var req_ingenuity: int = 0
+
+## ── Target Values ───────────────────────────────────────────────────────────
+## Continuous per-category targets for resolution strategies that produce
+## a continuous total rather than a discrete rank (currently just
+## TagBreadthResolutionStrategy's tag-weighted totals) — separate from
+## req_* above, which stays the hard rank prerequisite regardless of
+## which strategy is active. Left at 0 (unset), a category falls back to
+## its own req_* value as the target, so existing/new events work without
+## needing explicit tuning — see get_target_values().
+
+@export_group("Target Values")
+@export var target_combat: float = 0.0
+@export var target_subterfuge: float = 0.0
+@export var target_attunement: float = 0.0
+@export var target_erudition: float = 0.0
+@export var target_influence: float = 0.0
+@export var target_ingenuity: float = 0.0
 
 func set_proficiency_profile(combat: int, subterfuge: int, attunement: int,
 		erudition: int, influence: int, ingenuity: int) -> void:
@@ -84,6 +106,18 @@ func get_proficiency_requirements() -> Dictionary:
 		"erudition": req_erudition,
 		"influence": req_influence,
 		"ingenuity": req_ingenuity,
+	}
+
+## Per-category continuous targets, each falling back to its own req_*
+## value when left unset (0) — see the Target Values group comment above.
+func get_target_values() -> Dictionary:
+	return {
+		"combat": target_combat if target_combat > 0.0 else float(req_combat),
+		"subterfuge": target_subterfuge if target_subterfuge > 0.0 else float(req_subterfuge),
+		"attunement": target_attunement if target_attunement > 0.0 else float(req_attunement),
+		"erudition": target_erudition if target_erudition > 0.0 else float(req_erudition),
+		"influence": target_influence if target_influence > 0.0 else float(req_influence),
+		"ingenuity": target_ingenuity if target_ingenuity > 0.0 else float(req_ingenuity),
 	}
 
 func get_skill_requirements() -> Dictionary:
