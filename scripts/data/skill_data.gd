@@ -5,6 +5,13 @@
 ## interact with event modifiers — an event tagged [Flier] can negate skills
 ## tagged [Melee], reducing the agent's effective Proficiency score for that
 ## mission without changing their base sheet.
+##
+## This class only holds one skill's own data (name, proficiency, rank,
+## tags) plus lookups that never need another skill or an outside tag list
+## to answer. Anything that reasons about a *set* of skills together, or a
+## skill against something external (rank aggregation, tag-countering,
+## eventually synergies) lives in SkillHandler instead — see
+## scripts/managers/skill_handler.gd.
 class_name SkillData
 extends Resource
 
@@ -34,7 +41,11 @@ const PROFICIENCY_COLORS: Dictionary = {
 	"ingenuity": Color(0.4, 0.6, 0.85),
 }
 
+## Points a single skill rank contributes toward its proficiency's 0-200
+## score — i.e. what a skill gains per rank.
 const RANK_SCALE: int = 20
+
+const VISIBLE_MAX_RANK: int = 5
 
 @export var skill_name: String = ""
 @export var proficiency: Proficiency = Proficiency.COMBAT
@@ -59,71 +70,6 @@ func get_scaled_rank() -> int:
 
 func has_tag(tag: String) -> bool:
 	return tag in tags
-
-func is_countered_by(counter_tags: PackedStringArray) -> bool:
-	for ct in counter_tags:
-		if ct in tags:
-			return true
-	return false
-
-const VISIBLE_MAX_RANK: int = 5
-
-const RANK_THRESHOLDS: Array[Dictionary] = [
-	{"min_skills": 1, "min_rank": 1},
-	{"min_skills": 1, "min_rank": 2},
-	{"min_skills": 2, "min_rank": 2},
-	{"min_skills": 2, "min_rank": 3},
-	{"min_skills": 3, "min_rank": 3},
-	{"min_skills": 3, "min_rank": 4},
-	{"min_skills": 3, "min_rank": 4},
-	{"min_skills": 4, "min_rank": 4},
-	{"min_skills": 4, "min_rank": 5},
-	{"min_skills": 5, "min_rank": 5},
-]
-
-static func compute_proficiency_rank(skills_in_category: Array[SkillData]) -> int:
-	if skills_in_category.is_empty():
-		return 0
-	var ranks: Array[int] = []
-	for s: SkillData in skills_in_category:
-		ranks.append(s.rank)
-	ranks.sort()
-	var prof_rank := 0
-	for i in range(RANK_THRESHOLDS.size()):
-		var req: Dictionary = RANK_THRESHOLDS[i]
-		var min_skills: int = req["min_skills"]
-		var min_rank: int = req["min_rank"]
-		if ranks.size() < min_skills:
-			break
-		var qualifying := 0
-		for r: int in ranks:
-			if r >= min_rank:
-				qualifying += 1
-		if qualifying >= min_skills:
-			prof_rank = i + 1
-		else:
-			break
-	return prof_rank
-
-static func empty_proficiency_dict() -> Dictionary:
-	return {
-		"combat": 0.0,
-		"subterfuge": 0.0,
-		"attunement": 0.0,
-		"erudition": 0.0,
-		"influence": 0.0,
-		"ingenuity": 0.0,
-	}
-
-static func empty_rank_dict() -> Dictionary:
-	return {
-		"combat": 0,
-		"subterfuge": 0,
-		"attunement": 0,
-		"erudition": 0,
-		"influence": 0,
-		"ingenuity": 0,
-	}
 
 static func proficiency_key_for(prof: Proficiency) -> String:
 	return PROFICIENCY_KEYS[prof]

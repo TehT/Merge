@@ -55,7 +55,7 @@ func _ready() -> void:
 	_on_concealment_changed(Game.concealment_state.value, 0.0)
 
 
-func _update_date() -> void:
+func _update_date(day: int = 0) -> void:
 	var geoscape: Node = get_tree().current_scene
 	var date_str: String = geoscape.get_date_string()
 	_date_label.text = date_str

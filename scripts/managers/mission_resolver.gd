@@ -32,7 +32,7 @@ static func compute_rank_coverage(agent_ranks: Dictionary, event: EventData) -> 
 ## Works the same for a solo agent (a 1-member array reduces to that
 ## agent's own ranks).
 static func compute_team_ranks(members: Array[AgentData]) -> Dictionary:
-	var best := SkillData.empty_rank_dict()
+	var best := SkillHandler.empty_rank_dict()
 	for m: AgentData in members:
 		var ranks := m.get_proficiency_ranks()
 		for key: String in SkillData.PROFICIENCY_KEYS:

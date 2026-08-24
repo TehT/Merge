@@ -61,7 +61,7 @@ func has_member(agent_id: String) -> bool:
 	return agent_id in member_ids
 
 func compute_effective_skills(members: Array[AgentData]) -> Dictionary:
-	var totals := SkillData.empty_proficiency_dict()
+	var totals := SkillHandler.empty_proficiency_dict()
 	if members.is_empty():
 		return totals
 

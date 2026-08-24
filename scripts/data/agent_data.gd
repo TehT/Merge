@@ -77,7 +77,7 @@ static func _generate_id() -> String:
 ## Base proficiency scores derived from all skills (no event context).
 ## Returns { "combat": float, "subterfuge": float, ... } on the 0-200 scale.
 func get_proficiency_scores() -> Dictionary:
-	var scores := SkillData.empty_proficiency_dict()
+	var scores := SkillHandler.empty_proficiency_dict()
 	for skill: SkillData in skills:
 		scores[skill.get_proficiency_key()] += float(skill.get_scaled_rank())
 	return scores
@@ -85,9 +85,9 @@ func get_proficiency_scores() -> Dictionary:
 ## Effective proficiency scores against a specific event's counter-tags.
 ## Skills whose tags are countered contribute nothing.
 func get_effective_scores(counter_tags: PackedStringArray) -> Dictionary:
-	var scores := SkillData.empty_proficiency_dict()
+	var scores := SkillHandler.empty_proficiency_dict()
 	for skill: SkillData in skills:
-		if not skill.is_countered_by(counter_tags):
+		if not SkillHandler.is_countered_by(skill, counter_tags):
 			scores[skill.get_proficiency_key()] += float(skill.get_scaled_rank())
 	return scores
 
@@ -102,9 +102,9 @@ func get_proficiency_ranks() -> Dictionary:
 		by_key[key] = [] as Array[SkillData]
 	for skill: SkillData in skills:
 		by_key[skill.get_proficiency_key()].append(skill)
-	var ranks := SkillData.empty_rank_dict()
+	var ranks := SkillHandler.empty_rank_dict()
 	for key: String in SkillData.PROFICIENCY_KEYS:
-		ranks[key] = SkillData.compute_proficiency_rank(by_key[key])
+		ranks[key] = SkillHandler.compute_proficiency_rank(by_key[key])
 	return ranks
 
 func get_primary_proficiency() -> String:
