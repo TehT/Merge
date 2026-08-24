@@ -35,20 +35,13 @@ var magic_intensity: float = 1.0
 ## proficiency requirements, time limit, escalation) that spawn_random_event()
 ## duplicates and fills in with a fresh id/location. Adding or rebalancing
 ## an event type is a .tres edit, not a code change.
-var spawn_templates: Array[EventData] = [
-	preload("res://data/event_templates/cryptid_sighting.tres"),
-	preload("res://data/event_templates/magical_surge.tres"),
-	preload("res://data/event_templates/artifact_activation.tres"),
-	preload("res://data/event_templates/cult_activity.tres"),
-	preload("res://data/event_templates/haunting.tres"),
-	preload("res://data/event_templates/fairy_incursion.tres"),
+@export var spawn_templates: Array[EventData] = [
 ]
 
 ## Escalation-only profiles — not part of the random spawn pool, only
 ## reached via _spawn_escalation() looking up an expiring event's
 ## escalates_to type.
-var escalation_templates: Array[EventData] = [
-	preload("res://data/event_templates/portal_breach.tres"),
+@export var escalation_templates: Array[EventData] = [
 ]
 
 func _ready() -> void:
@@ -69,6 +62,8 @@ func _maybe_spawn_event() -> void:
 		spawn_random_event()
 
 func spawn_random_event(template_override: EventData = null) -> EventData:
+	if spawn_templates.size() == 0:
+		return
 	var tmpl: EventData = template_override if template_override != null \
 		else spawn_templates[randi() % spawn_templates.size()]
 
@@ -120,6 +115,8 @@ func _handle_expiration(event: EventData) -> void:
 		_spawn_escalation(event)
 
 func _spawn_escalation(parent: EventData) -> void:
+	if escalation_templates.size() == 0:
+		return;
 	var tmpl := _find_template_for_type(parent.escalates_to)
 	var child := spawn_random_event(tmpl)
 	child.location_city = parent.location_city

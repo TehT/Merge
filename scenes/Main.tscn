@@ -12,6 +12,7 @@
 [ext_resource type="Script" uid="uid://cq2wc21b23uy0" path="res://scripts/managers/agent_manager.gd" id="9_agentmanager"]
 [ext_resource type="Script" uid="uid://edkbsd6c330g" path="res://scripts/managers/event_manager.gd" id="10_eventmanager"]
 [ext_resource type="Script" uid="uid://bqim33p8183g3" path="res://scripts/ui/agent_tab.gd" id="11_agenttab"]
+[ext_resource type="Script" uid="uid://dbwfj2d3cmfv1" path="res://scripts/managers/resolution/stat_check_resolution_strategy.gd" id="11_yxlcp"]
 [ext_resource type="Script" uid="uid://cmn5k3mn1d2ww" path="res://scripts/managers/team_manager.gd" id="12_teammanager"]
 [ext_resource type="Theme" uid="uid://bvs1oeej2kgvg" path="res://theme/ui_theme.tres" id="13_uitheme"]
 [ext_resource type="Script" uid="uid://dglngvv1scups" path="res://scripts/ui/top_bar.gd" id="14_topbar"]
@@ -21,6 +22,10 @@
 [ext_resource type="Script" uid="uid://d3sowmtwnncfn" path="res://scripts/ui/slideout_panel.gd" id="18_skillslideout"]
 [ext_resource type="Script" uid="uid://dgvq56yx673qk" path="res://scripts/ui/event_map_labels.gd" id="19_eventmaplabels"]
 [ext_resource type="Script" uid="uid://bsq774q1vd22" path="res://scripts/travel_path_layer.gd" id="20_travelpathlayer"]
+
+[sub_resource type="Resource" id="Resource_1iba3"]
+script = ExtResource("11_yxlcp")
+metadata/_custom_type_script = "uid://dbwfj2d3cmfv1"
 
 [sub_resource type="Environment" id="Environment_1"]
 background_mode = 2
@@ -84,8 +89,7 @@ script = ExtResource("12_teammanager")
 [node name="EventManager" type="Node" parent="." unique_id=388966121]
 unique_name_in_owner = true
 script = ExtResource("10_eventmanager")
-magic_intensity_growth_per_day = null
-base_spawn_chance_per_day = null
+resolution_strategy = SubResource("Resource_1iba3")
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=1588015448]
 environment = SubResource("Environment_1")
