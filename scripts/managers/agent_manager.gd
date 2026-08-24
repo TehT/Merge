@@ -24,15 +24,15 @@ func _ready() -> void:
 	print("[AgentManager] roster initialized with %d agents" % roster.size())
 
 ## Starting roster, procedurally built via AgentGenerator instead of
-## hand-authored — each recruit rolls Generalist vs. Specialist per
-## generalist_chance, then AgentGenerator draws their skills from the
-## res://data/skills/<proficiency>/ catalog. All mundane for now; nothing
-## rolls a SupernaturalType yet since there's no Awakened skill catalog to
-## draw from.
+## hand-authored — each recruit gets a NameGenerator name, rolls
+## Generalist vs. Specialist per generalist_chance, then AgentGenerator
+## draws their skills from the res://data/skills/<proficiency>/ catalog.
+## All mundane for now; nothing rolls a SupernaturalType yet since there's
+## no Awakened skill catalog to draw from.
 func _create_starting_roster() -> Array[AgentData]:
 	var roster_out: Array[AgentData] = []
 	for i in range(starting_roster_size):
-		var recruit_name := "Recruit %d" % (i + 1)
+		var recruit_name := NameGenerator.generate_name()
 		if randf() < generalist_chance:
 			roster_out.append(AgentGenerator.generate_generalist(recruit_name))
 		else:
