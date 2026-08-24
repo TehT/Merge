@@ -2,55 +2,41 @@ extends Node
 class_name AgentManager
 ## AgentManager — a persistent node in Main.tscn, referenced elsewhere via
 ## Game.agent_manager (registers itself in _ready() — see game.gd). Owns
-## the player's agent roster: the starting 4 agents, status transitions,
-## and lookup helpers.
+## the player's agent roster: the procedurally-generated starting recruits,
+## status transitions, and lookup helpers.
 
 signal roster_changed()
 signal agent_status_changed(agent_id: String, old_status: AgentData.Status, new_status: AgentData.Status)
 
 @export var roster: Array[AgentData] = []
 
+## How many recruits to procedurally generate for the starting roster.
+@export var starting_roster_size: int = 4
+
+## Chance (0-1) that a given recruit is generated as a Generalist rather
+## than a Specialist. 0.6 = 3:5 generalists, i.e. a 2:3 specialist-to-
+## generalist ratio.
+@export_range(0.0, 1.0) var generalist_chance: float = 0.6
+
 func _ready() -> void:
 	Game.agent_manager = self
 	roster = _create_starting_roster()
 	print("[AgentManager] roster initialized with %d agents" % roster.size())
 
-## Starting roster's skills, loaded from saved SkillData resources (see
-## res://data/skills/<proficiency>/) instead of built inline — rebalancing
-## a skill or adding a new one is a .tres edit, not a code change. The
-## agent shells themselves (name, supernatural type) stay code-built here
-## since there's no per-agent resource type yet.
+## Starting roster, procedurally built via AgentGenerator instead of
+## hand-authored — each recruit rolls Generalist vs. Specialist per
+## generalist_chance, then AgentGenerator draws their skills from the
+## res://data/skills/<proficiency>/ catalog. All mundane for now; nothing
+## rolls a SupernaturalType yet since there's no Awakened skill catalog to
+## draw from.
 func _create_starting_roster() -> Array[AgentData]:
 	var roster_out: Array[AgentData] = []
-
-	var mara_skills: Array[SkillData] = [
-		SkillHandler.instantiate(preload("res://data/skills/combat/firearms.tres"), 3),
-		SkillHandler.instantiate(preload("res://data/skills/combat/cqc.tres"), 3),
-		SkillHandler.instantiate(preload("res://data/skills/combat/heavy_ordnance.tres"), 2),
-	]
-	roster_out.append(AgentData.new().setup("Mara Okonkwo", mara_skills, AgentData.SupernaturalType.NONE))
-
-	var iris_skills: Array[SkillData] = [
-		SkillHandler.instantiate(preload("res://data/skills/subterfuge/infiltration.tres"), 4),
-		SkillHandler.instantiate(preload("res://data/skills/subterfuge/misdirection.tres"), 3),
-		SkillHandler.instantiate(preload("res://data/skills/subterfuge/fieldcraft.tres"), 2),
-	]
-	roster_out.append(AgentData.new().setup("Iris Vance", iris_skills, AgentData.SupernaturalType.SHADOW))
-
-	var desmond_skills: Array[SkillData] = [
-		SkillHandler.instantiate(preload("res://data/skills/ingenuity/surveillance.tres"), 3),
-		SkillHandler.instantiate(preload("res://data/skills/ingenuity/cryptography.tres"), 3),
-		SkillHandler.instantiate(preload("res://data/skills/influence/negotiation.tres"), 3),
-	]
-	roster_out.append(AgentData.new().setup("Desmond Ffrench", desmond_skills, AgentData.SupernaturalType.NONE))
-
-	var kalinda_skills: Array[SkillData] = [
-		SkillHandler.instantiate(preload("res://data/skills/attunement/sixth_sense.tres"), 3),
-		SkillHandler.instantiate(preload("res://data/skills/erudition/anomaly_reading.tres"), 3),
-		SkillHandler.instantiate(preload("res://data/skills/influence/cold_reading.tres"), 2),
-	]
-	roster_out.append(AgentData.new().setup("Kalinda Reyes", kalinda_skills, AgentData.SupernaturalType.SEER))
-
+	for i in range(starting_roster_size):
+		var recruit_name := "Recruit %d" % (i + 1)
+		if randf() < generalist_chance:
+			roster_out.append(AgentGenerator.generate_generalist(recruit_name))
+		else:
+			roster_out.append(AgentGenerator.generate_random_specialist(recruit_name))
 	return roster_out
 
 func get_available_agents() -> Array[AgentData]:
