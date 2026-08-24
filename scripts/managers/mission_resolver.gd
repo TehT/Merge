@@ -27,21 +27,31 @@ static func compute_rank_coverage(agent_ranks: Dictionary, event: EventData) -> 
 	return coverage_sum / float(req_count)
 
 
-## Best proficiency ranks across all members — the team's combined rank
-## in each proficiency is the highest individual rank among its members.
-## Works the same for a solo agent (a 1-member array reduces to that
-## agent's own ranks). Pass active_tags (typically the event's own tags)
-## to recalculate each member's ranks under that context first — see
+## EXPERIMENTAL "teamwork" model: instead of each member's proficiency
+## being computed independently and the team taking the best of those,
+## every member's skills are pooled into one shared pile per proficiency
+## category *before* rank aggregation runs — so a team can reach a
+## proficiency rank none of its members could hit alone (two agents each
+## with one rank-2 Combat skill don't just have "one rank-2 Combat skill
+## twice," they collectively look like one agent with two rank-2 Combat
+## skills, which is enough to qualify for rank 3). Reduces to a solo
+## agent's own get_proficiency_ranks() for a 1-member team, since pooling
+## one member's skills changes nothing. Pass active_tags (typically the
+## event's own tags) to recalculate under that context — see
 ## SkillHandler.compute_effective_rank.
 static func compute_team_ranks(members: Array[AgentData],
 		active_tags: PackedStringArray = PackedStringArray()) -> Dictionary:
-	var best := SkillHandler.empty_rank_dict()
+	var pooled_skills: Dictionary = {}
+	for key: String in SkillData.PROFICIENCY_KEYS:
+		pooled_skills[key] = [] as Array[SkillData]
 	for m: AgentData in members:
-		var ranks := m.get_proficiency_ranks(active_tags)
-		for key: String in SkillData.PROFICIENCY_KEYS:
-			if ranks[key] > best[key]:
-				best[key] = ranks[key]
-	return best
+		for skill: SkillData in m.skills:
+			pooled_skills[skill.get_proficiency_key()].append(skill)
+
+	var ranks := SkillHandler.empty_rank_dict()
+	for key: String in SkillData.PROFICIENCY_KEYS:
+		ranks[key] = SkillHandler.compute_proficiency_rank(pooled_skills[key], active_tags)
+	return ranks
 
 
 static func compute_team_suitability(event: EventData, members: Array[AgentData]) -> float:
