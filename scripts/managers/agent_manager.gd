@@ -15,38 +15,45 @@ func _ready() -> void:
 	roster = _create_starting_roster()
 	print("[AgentManager] roster initialized with %d agents" % roster.size())
 
+## Starting roster's skills, loaded from saved SkillData resources (see
+## res://data/skills/<proficiency>/) instead of built inline — rebalancing
+## a skill or adding a new one is a .tres edit, not a code change. Skills
+## aren't agent-specific, so they're grouped by proficiency rather than by
+## which agent happens to use them; the same resource can be reused across
+## multiple agents. The agent shells themselves (name, supernatural type)
+## stay code-built here since there's no per-agent resource type yet.
 func _create_starting_roster() -> Array[AgentData]:
 	var roster_out: Array[AgentData] = []
 
 	var mara_skills: Array[SkillData] = [
-		SkillData.new("Close Quarters Combat", SkillData.Proficiency.COMBAT, 4, PackedStringArray(["Melee", "Mundane"])),
-		SkillData.new("Firearms", SkillData.Proficiency.COMBAT, 3, PackedStringArray(["Ranged", "Mundane"])),
-		SkillData.new("Fieldcraft", SkillData.Proficiency.SUBTERFUGE, 2, PackedStringArray(["Stealth", "Mundane"])),
-		SkillData.new("Threat Assessment", SkillData.Proficiency.INGENUITY, 1, PackedStringArray(["Tactical"])),
+		preload("res://data/skills/combat/close_quarters_combat.tres"),
+		preload("res://data/skills/combat/firearms.tres"),
+		preload("res://data/skills/subterfuge/fieldcraft.tres"),
+		preload("res://data/skills/ingenuity/threat_assessment.tres"),
 	]
 	roster_out.append(AgentData.new().setup("Mara Okonkwo", mara_skills, AgentData.SupernaturalType.NONE))
 
 	var iris_skills: Array[SkillData] = [
-		SkillData.new("Shadowmeld", SkillData.Proficiency.SUBTERFUGE, 4, PackedStringArray(["Stealth", "Arcane"])),
-		SkillData.new("Infiltration", SkillData.Proficiency.SUBTERFUGE, 3, PackedStringArray(["Stealth", "Mundane"])),
-		SkillData.new("Dark Channeling", SkillData.Proficiency.ATTUNEMENT, 3, PackedStringArray(["Arcane", "Offensive"])),
-		SkillData.new("Occult Lore", SkillData.Proficiency.ERUDITION, 2, PackedStringArray(["Knowledge"])),
+		preload("res://data/skills/subterfuge/shadowmeld.tres"),
+		preload("res://data/skills/subterfuge/infiltration.tres"),
+		preload("res://data/skills/attunement/dark_channeling.tres"),
+		preload("res://data/skills/erudition/occult_lore.tres"),
 	]
 	roster_out.append(AgentData.new().setup("Iris Vance", iris_skills, AgentData.SupernaturalType.SHADOW))
 
 	var desmond_skills: Array[SkillData] = [
-		SkillData.new("Negotiation", SkillData.Proficiency.INFLUENCE, 4, PackedStringArray(["Social", "Mundane"])),
-		SkillData.new("Electronic Surveillance", SkillData.Proficiency.INGENUITY, 3, PackedStringArray(["Tech", "Mundane"])),
-		SkillData.new("Research", SkillData.Proficiency.ERUDITION, 3, PackedStringArray(["Knowledge", "Mundane"])),
-		SkillData.new("Cryptography", SkillData.Proficiency.INGENUITY, 2, PackedStringArray(["Tech", "Knowledge"])),
+		preload("res://data/skills/influence/negotiation.tres"),
+		preload("res://data/skills/ingenuity/electronic_surveillance.tres"),
+		preload("res://data/skills/erudition/research.tres"),
+		preload("res://data/skills/ingenuity/cryptography.tres"),
 	]
 	roster_out.append(AgentData.new().setup("Desmond Ffrench", desmond_skills, AgentData.SupernaturalType.NONE))
 
 	var kalinda_skills: Array[SkillData] = [
-		SkillData.new("Precognition", SkillData.Proficiency.ATTUNEMENT, 3, PackedStringArray(["Arcane", "Divination"])),
-		SkillData.new("Combat Training", SkillData.Proficiency.COMBAT, 2, PackedStringArray(["Melee", "Mundane"])),
-		SkillData.new("Intuition", SkillData.Proficiency.INFLUENCE, 2, PackedStringArray(["Social", "Arcane"])),
-		SkillData.new("Anomaly Reading", SkillData.Proficiency.ERUDITION, 2, PackedStringArray(["Knowledge", "Arcane"])),
+		preload("res://data/skills/attunement/precognition.tres"),
+		preload("res://data/skills/combat/combat_training.tres"),
+		preload("res://data/skills/influence/intuition.tres"),
+		preload("res://data/skills/erudition/anomaly_reading.tres"),
 	]
 	roster_out.append(AgentData.new().setup("Kalinda Reyes", kalinda_skills, AgentData.SupernaturalType.SEER))
 
