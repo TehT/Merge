@@ -7,4 +7,4 @@ script = ExtResource("1_skilldata")
 skill_name = "Threat Assessment"
 proficiency = 5
 rank = 1
-tags = PackedStringArray("Tactical")
+tags = PackedStringArray("Mundane", "Tactical", "Analysis")

@@ -4,7 +4,7 @@
 
 [resource]
 script = ExtResource("1_skilldata")
-skill_name = "Combat Training"
-proficiency = 0
-rank = 2
-tags = PackedStringArray("Melee", "Mundane")
+skill_name = "Surveillance"
+proficiency = 5
+rank = 1
+tags = PackedStringArray("Mundane", "Tech", "Recon")

@@ -6,5 +6,5 @@
 script = ExtResource("1_skilldata")
 skill_name = "Research"
 proficiency = 3
-rank = 3
-tags = PackedStringArray("Knowledge", "Mundane")
+rank = 1
+tags = PackedStringArray("Mundane", "Academic", "Data")

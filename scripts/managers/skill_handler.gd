@@ -83,6 +83,37 @@ static func is_countered_by(skill: SkillData, counter_tags: PackedStringArray) -
 			return true
 	return false
 
+## An independent copy of a catalog skill at a specific rank. Skills aren't
+## agent-specific — the same res://data/skills/<proficiency>/*.tres catalog
+## entry can back any number of agents — so this always duplicate()s rather
+## than handing back the shared preloaded/loaded resource directly. Without
+## this, two agents assigned "the same" skill would alias one SkillData
+## instance and a rank change for one would silently bleed into the other.
+static func instantiate(base: SkillData, rank: int) -> SkillData:
+	var s: SkillData = base.duplicate()
+	s.rank = rank
+	return s
+
+## Every catalog skill belonging to one Proficiency, scanned live from
+## res://data/skills/<proficiency>/ — add a .tres there and it's picked up
+## automatically on the next call, no registration or code changes needed.
+static func get_skills_for_proficiency(prof: SkillData.Proficiency) -> Array[SkillData]:
+	var out: Array[SkillData] = []
+	var dir_path := "res://data/skills/%s/" % SkillData.PROFICIENCY_KEYS[prof]
+	var dir := DirAccess.open(dir_path)
+	if dir == null:
+		return out
+	dir.list_dir_begin()
+	var file_name := dir.get_next()
+	while file_name != "":
+		if file_name.ends_with(".tres"):
+			var skill: SkillData = load(dir_path + file_name)
+			if skill != null:
+				out.append(skill)
+		file_name = dir.get_next()
+	dir.list_dir_end()
+	return out
+
 static func empty_proficiency_dict() -> Dictionary:
 	return {
 		"combat": 0.0,

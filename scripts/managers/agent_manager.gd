@@ -17,43 +17,37 @@ func _ready() -> void:
 
 ## Starting roster's skills, loaded from saved SkillData resources (see
 ## res://data/skills/<proficiency>/) instead of built inline — rebalancing
-## a skill or adding a new one is a .tres edit, not a code change. Skills
-## aren't agent-specific, so they're grouped by proficiency rather than by
-## which agent happens to use them; the same resource can be reused across
-## multiple agents. The agent shells themselves (name, supernatural type)
-## stay code-built here since there's no per-agent resource type yet.
+## a skill or adding a new one is a .tres edit, not a code change. The
+## agent shells themselves (name, supernatural type) stay code-built here
+## since there's no per-agent resource type yet.
 func _create_starting_roster() -> Array[AgentData]:
 	var roster_out: Array[AgentData] = []
 
 	var mara_skills: Array[SkillData] = [
-		preload("res://data/skills/combat/close_quarters_combat.tres"),
-		preload("res://data/skills/combat/firearms.tres"),
-		preload("res://data/skills/subterfuge/fieldcraft.tres"),
-		preload("res://data/skills/ingenuity/threat_assessment.tres"),
+		SkillHandler.instantiate(preload("res://data/skills/combat/firearms.tres"), 3),
+		SkillHandler.instantiate(preload("res://data/skills/combat/cqc.tres"), 3),
+		SkillHandler.instantiate(preload("res://data/skills/combat/heavy_ordnance.tres"), 2),
 	]
 	roster_out.append(AgentData.new().setup("Mara Okonkwo", mara_skills, AgentData.SupernaturalType.NONE))
 
 	var iris_skills: Array[SkillData] = [
-		preload("res://data/skills/subterfuge/shadowmeld.tres"),
-		preload("res://data/skills/subterfuge/infiltration.tres"),
-		preload("res://data/skills/attunement/dark_channeling.tres"),
-		preload("res://data/skills/erudition/occult_lore.tres"),
+		SkillHandler.instantiate(preload("res://data/skills/subterfuge/infiltration.tres"), 4),
+		SkillHandler.instantiate(preload("res://data/skills/subterfuge/misdirection.tres"), 3),
+		SkillHandler.instantiate(preload("res://data/skills/subterfuge/fieldcraft.tres"), 2),
 	]
 	roster_out.append(AgentData.new().setup("Iris Vance", iris_skills, AgentData.SupernaturalType.SHADOW))
 
 	var desmond_skills: Array[SkillData] = [
-		preload("res://data/skills/influence/negotiation.tres"),
-		preload("res://data/skills/ingenuity/electronic_surveillance.tres"),
-		preload("res://data/skills/erudition/research.tres"),
-		preload("res://data/skills/ingenuity/cryptography.tres"),
+		SkillHandler.instantiate(preload("res://data/skills/ingenuity/surveillance.tres"), 3),
+		SkillHandler.instantiate(preload("res://data/skills/ingenuity/cryptography.tres"), 3),
+		SkillHandler.instantiate(preload("res://data/skills/influence/negotiation.tres"), 3),
 	]
 	roster_out.append(AgentData.new().setup("Desmond Ffrench", desmond_skills, AgentData.SupernaturalType.NONE))
 
 	var kalinda_skills: Array[SkillData] = [
-		preload("res://data/skills/attunement/precognition.tres"),
-		preload("res://data/skills/combat/combat_training.tres"),
-		preload("res://data/skills/influence/intuition.tres"),
-		preload("res://data/skills/erudition/anomaly_reading.tres"),
+		SkillHandler.instantiate(preload("res://data/skills/attunement/sixth_sense.tres"), 3),
+		SkillHandler.instantiate(preload("res://data/skills/erudition/anomaly_reading.tres"), 3),
+		SkillHandler.instantiate(preload("res://data/skills/influence/cold_reading.tres"), 2),
 	]
 	roster_out.append(AgentData.new().setup("Kalinda Reyes", kalinda_skills, AgentData.SupernaturalType.SEER))
 
