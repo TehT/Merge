@@ -87,7 +87,8 @@ func _ready() -> void:
 ## Permanent diamond icon at HQ's location. Not tied to the event
 ## lifecycle, so it's created once here rather than via add/remove signals.
 func _create_hq_marker() -> void:
-	var hq_marker := add_site(Game.team_manager.HQ_NAME, Game.team_manager.HQ_LOCATION.y, Game.team_manager.HQ_LOCATION.x)
+	var hq := Game.base_manager.get_primary_base()
+	var hq_marker := add_site(hq.base_name, hq.location.y, hq.location.x)
 	hq_marker.marker_size = 0.09
 	hq_marker.is_base = true
 	hq_marker.set_color(Color(0.95, 0.9, 0.6))

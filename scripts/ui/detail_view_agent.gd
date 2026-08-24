@@ -16,6 +16,13 @@ func populate(agent: AgentData) -> void:
 
 	add_child(HSeparator.new())
 
+	_add_section("Equipment")
+	_add_clickable_slot("Weapon", agent.equipped_weapon, agent)
+	_add_clickable_slot("Armor", agent.equipped_armor, agent)
+	_add_clickable_slot("Gadget", agent.equipped_gadget, agent)
+
+	add_child(HSeparator.new())
+
 	_add_section("Condition")
 	_add_info_row("Health", "%d / %d" % [int(agent.health), int(agent.max_health)])
 	_add_info_row("Morale", "%d" % int(agent.morale))
@@ -33,6 +40,43 @@ func populate(agent: AgentData) -> void:
 		_add_section("Supernatural")
 		_add_info_row("Type", agent.get_type_name())
 		_add_info_row("Power", "%.0f" % agent.supernatural_power)
+
+
+func _add_clickable_slot(slot_type: String, equipped: EquipmentData, agent: AgentData) -> void:
+	var row := HBoxContainer.new()
+	row.mouse_filter = Control.MOUSE_FILTER_STOP
+	row.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	row.add_theme_constant_override("separation", 6)
+
+	var lbl := Label.new()
+	lbl.text = slot_type
+	lbl.custom_minimum_size.x = 80
+	lbl.add_theme_font_size_override("font_size", 13)
+	lbl.add_theme_color_override("font_color", Color(0.55, 0.55, 0.6, 1.0))
+	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(lbl)
+
+	var val_lbl := Label.new()
+	val_lbl.text = equipped.equipment_name if equipped != null else "Empty"
+	val_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	val_lbl.add_theme_font_size_override("font_size", 13)
+	if equipped == null:
+		val_lbl.add_theme_color_override("font_color", Color(0.45, 0.45, 0.5, 1.0))
+	val_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(val_lbl)
+
+	var arrow := Label.new()
+	arrow.text = "›"
+	arrow.add_theme_font_size_override("font_size", 16)
+	arrow.add_theme_color_override("font_color", Color(0.4, 0.42, 0.48, 1.0))
+	arrow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(arrow)
+
+	row.gui_input.connect(func(ev: InputEvent) -> void:
+		if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
+			Game.slideout_panel.show_equip_slot(agent, slot_type))
+
+	add_child(row)
 
 
 func _add_clickable_prof_rank(prof_key: String, rank: int, color: Color, agent: AgentData) -> void:

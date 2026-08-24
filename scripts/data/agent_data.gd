@@ -53,11 +53,15 @@ var level: int = 1
 var status: Status = Status.AVAILABLE
 
 ## ── Equipment ───────────────────────────────────────────────────────────────
+## Composable EquipmentData (see scripts/data/equipment/) — one slot per
+## slot_type. Effects apply automatically wherever ranks/scores are read
+## (get_proficiency_ranks/get_proficiency_scores below); nothing else
+## needs to know equipment exists.
 
 @export_group("Equipment")
-@export var weapon_slot: String = ""
-@export var armor_slot: String = ""
-@export var gadget_slot: String = ""
+@export var equipped_weapon: EquipmentData
+@export var equipped_armor: EquipmentData
+@export var equipped_gadget: EquipmentData
 @export var magical_item_slot: String = ""
 
 ## ── Convenience ─────────────────────────────────────────────────────────────
@@ -74,19 +78,20 @@ func setup(p_name: String, p_skills: Array[SkillData],
 static func _generate_id() -> String:
 	return "agt_%d_%d" % [Time.get_ticks_msec(), randi() % 10000]
 
-## Base proficiency scores derived from all skills (no event context).
-## Returns { "combat": float, "subterfuge": float, ... } on the 0-200 scale.
+## Proficiency scores (0-200 scale) derived from this agent's effective
+## skill pool — their own skills plus whatever equipped gear grants or
+## modifies — and adjusted by any equipped EffectStatBoost. See
+## EquipmentHandler.compute_effective_scores().
 func get_proficiency_scores() -> Dictionary:
-	var scores := SkillHandler.empty_proficiency_dict()
-	for skill: SkillData in skills:
-		scores[skill.get_proficiency_key()] += float(skill.get_scaled_rank())
-	return scores
+	return EquipmentHandler.compute_effective_scores(self)
 
 ## Effective proficiency scores against a specific event's counter-tags.
-## Skills whose tags are countered contribute nothing.
+## Skills whose tags are countered contribute nothing. Equipment-aware
+## (granted/modified skills included) but does not apply EffectStatBoost —
+## that's a separate axis from counter-tag negation.
 func get_effective_scores(counter_tags: PackedStringArray) -> Dictionary:
 	var scores := SkillHandler.empty_proficiency_dict()
-	for skill: SkillData in skills:
+	for skill: SkillData in EquipmentHandler.get_effective_skills(self):
 		if not SkillHandler.is_countered_by(skill, counter_tags):
 			scores[skill.get_proficiency_key()] += float(skill.get_scaled_rank())
 	return scores
@@ -96,23 +101,44 @@ func get_effective_scores(counter_tags: PackedStringArray) -> Dictionary:
 func get_skills() -> Dictionary:
 	return get_proficiency_scores()
 
-## Proficiency ranks derived from this agent's skills. Pass active_tags
+## Proficiency ranks derived from this agent's effective skill pool (their
+## own skills plus whatever equipped gear grants or modifies), adjusted by
+## any equipped EffectStatBoost-style rank effects. Pass active_tags
 ## (typically an event's tags) to recalculate under that context — a skill
 ## tagged e.g. [Explosive] can rank lower or higher than its sheet value
 ## depending on which tag_modifiers rules match, which can shift which
 ## Proficiency rank the category as a whole reaches. Callable again at any
 ## time with a different active_tags set (e.g. mid-mission, if an
 ## encounter phase changes what's active) — omit it for the base ranks.
+## See EquipmentHandler.compute_effective_ranks().
 func get_proficiency_ranks(active_tags: PackedStringArray = PackedStringArray()) -> Dictionary:
-	var by_key: Dictionary = {}
-	for key: String in SkillData.PROFICIENCY_KEYS:
-		by_key[key] = [] as Array[SkillData]
-	for skill: SkillData in skills:
-		by_key[skill.get_proficiency_key()].append(skill)
-	var ranks := SkillHandler.empty_rank_dict()
-	for key: String in SkillData.PROFICIENCY_KEYS:
-		ranks[key] = SkillHandler.compute_proficiency_rank(by_key[key], active_tags)
-	return ranks
+	return EquipmentHandler.compute_effective_ranks(self, active_tags)
+
+## True if agent meets every one of item's requirements — see
+## EquipmentHandler.can_equip().
+func can_equip(item: EquipmentData) -> bool:
+	return EquipmentHandler.can_equip(self, item)
+
+## Equips item into the slot matching its slot_type ("Weapon"/"Armor"/
+## "Gadget"), replacing whatever was there. Returns false (no change) if
+## can_equip() fails or slot_type isn't recognized.
+func equip(item: EquipmentData) -> bool:
+	if item == null or not can_equip(item):
+		return false
+	match item.slot_type:
+		"Weapon": equipped_weapon = item
+		"Armor": equipped_armor = item
+		"Gadget": equipped_gadget = item
+		_: return false
+	return true
+
+## Clears the named slot ("Weapon"/"Armor"/"Gadget"). No-op for an
+## unrecognized slot name.
+func unequip(slot_type: String) -> void:
+	match slot_type:
+		"Weapon": equipped_weapon = null
+		"Armor": equipped_armor = null
+		"Gadget": equipped_gadget = null
 
 func get_primary_proficiency() -> String:
 	var scores := get_proficiency_scores()

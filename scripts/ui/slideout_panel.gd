@@ -9,13 +9,18 @@ class_name SlideoutPanel
 ## (slideout_view_*.gd) so this file stays a thin dispatcher. Doubles as a
 ## drill-down for proficiency skills (clicking a proficiency bar), the
 ## squad picker for deploying a team to an event (clicking "Deploy Team"),
-## and a vehicle info card (clicking a fleet vehicle in the HQ panel).
+## a vehicle info card (clicking a fleet vehicle in the HQ panel), a
+## read-only equipment info card (clicking a locker item in the Equipment
+## tab), and the equip/unequip picker for one of an agent's equipment
+## slots (clicking a slot in the agent sheet).
 
 const SlideoutViewProficiency := preload("res://scripts/ui/slideout_view_proficiency.gd")
 const SlideoutViewDeploy := preload("res://scripts/ui/slideout_view_deploy.gd")
 const SlideoutViewVehicle := preload("res://scripts/ui/slideout_view_vehicle.gd")
+const SlideoutViewEquipment := preload("res://scripts/ui/slideout_view_equipment.gd")
+const SlideoutViewEquipSlot := preload("res://scripts/ui/slideout_view_equip_slot.gd")
 
-enum _Mode { NONE, PROFICIENCY, DEPLOY, VEHICLE }
+enum _Mode { NONE, PROFICIENCY, DEPLOY, VEHICLE, EQUIPMENT_INFO, EQUIP_SLOT }
 
 var _content: VBoxContainer
 var _mode: _Mode = _Mode.NONE
@@ -23,6 +28,8 @@ var _active_prof_key: String = ""
 var _active_agent: AgentData
 var _active_event: EventData
 var _active_vehicle: VehicleData
+var _active_equipment: EquipmentData
+var _active_slot_type: String = ""
 
 
 func _ready() -> void:
@@ -96,6 +103,35 @@ func show_vehicle(vehicle: VehicleData) -> void:
 	visible = true
 
 
+func show_equipment_info(item: EquipmentData) -> void:
+	if _mode == _Mode.EQUIPMENT_INFO and _active_equipment == item and visible:
+		dismiss()
+		return
+
+	_mode = _Mode.EQUIPMENT_INFO
+	_active_equipment = item
+	_clear_content()
+	var view: VBoxContainer = SlideoutViewEquipment.new()
+	_content.add_child(view)
+	view.populate(item, dismiss)
+	visible = true
+
+
+func show_equip_slot(agent: AgentData, slot_type: String) -> void:
+	if _mode == _Mode.EQUIP_SLOT and _active_agent == agent and _active_slot_type == slot_type and visible:
+		dismiss()
+		return
+
+	_mode = _Mode.EQUIP_SLOT
+	_active_agent = agent
+	_active_slot_type = slot_type
+	_clear_content()
+	var view: VBoxContainer = SlideoutViewEquipSlot.new()
+	_content.add_child(view)
+	view.populate(agent, slot_type, dismiss)
+	visible = true
+
+
 func dismiss() -> void:
 	visible = false
 	_mode = _Mode.NONE
@@ -103,6 +139,8 @@ func dismiss() -> void:
 	_active_agent = null
 	_active_event = null
 	_active_vehicle = null
+	_active_equipment = null
+	_active_slot_type = ""
 
 
 func _clear_content() -> void:

@@ -24,6 +24,8 @@
 [ext_resource type="Script" uid="uid://d3sowmtwnncfn" path="res://scripts/ui/slideout_panel.gd" id="18_skillslideout"]
 [ext_resource type="Script" uid="uid://dgvq56yx673qk" path="res://scripts/ui/event_map_labels.gd" id="19_eventmaplabels"]
 [ext_resource type="Script" uid="uid://bsq774q1vd22" path="res://scripts/travel_path_layer.gd" id="20_travelpathlayer"]
+[ext_resource type="Script" uid="uid://d1ppro81a3mt0" path="res://scripts/ui/equipment_tab.gd" id="21_equipmenttab"]
+[ext_resource type="Script" path="res://scripts/managers/base_manager.gd" id="22_basemanager"]
 
 [sub_resource type="Resource" id="Resource_1iba3"]
 script = ExtResource("11_yxlcp")
@@ -79,6 +81,10 @@ script = ExtResource("8_concealmentstate")
 [node name="AgentManager" type="Node" parent="." unique_id=1178527809]
 unique_name_in_owner = true
 script = ExtResource("9_agentmanager")
+
+[node name="BaseManager" type="Node" parent="." unique_id=2811577340]
+unique_name_in_owner = true
+script = ExtResource("22_basemanager")
 
 [node name="TeamManager" type="Node" parent="." unique_id=1533351038]
 unique_name_in_owner = true
@@ -357,11 +363,14 @@ text = "Research — coming soon"
 [node name="Equipment" type="ScrollContainer" parent="UI/Root/RightSidebar/Tabs" unique_id=795735576]
 visible = false
 layout_mode = 2
+horizontal_scroll_mode = 0
 metadata/_tab_index = 3
 
-[node name="EquipmentPlaceholder" type="Label" parent="UI/Root/RightSidebar/Tabs/Equipment" unique_id=1018624314]
+[node name="EquipmentList" type="VBoxContainer" parent="UI/Root/RightSidebar/Tabs/Equipment" unique_id=1018624314]
+unique_name_in_owner = true
 layout_mode = 2
-text = "Equipment — coming soon"
+size_flags_horizontal = 3
+script = ExtResource("21_equipmenttab")
 
 [node name="RightToggle" type="Button" parent="UI/Root" unique_id=1985642592]
 layout_mode = 1

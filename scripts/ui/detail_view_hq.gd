@@ -1,15 +1,19 @@
 extends "res://scripts/ui/detail_view_base.gd"
-## DetailViewHQ — base overview: fleet (clickable, opens the vehicle info
-## slideout), squads and their status, Equipment/Base Upgrades placeholders.
+## DetailViewHQ — base overview: fleet and local equipment (both
+## clickable, opening their info slideouts), squads and their status, a
+## Base Upgrades placeholder. Equipment here is only what's local to this
+## base (BaseData.local_equipment) — the right sidebar's Equipment tab
+## shows the full pool including org-wide global_equipment.
 
 func populate() -> void:
-	_add_title(Game.team_manager.HQ_NAME)
+	var hq := Game.base_manager.get_primary_base()
+	_add_title(hq.base_name)
 	_add_subtitle("Home base", Color(0.55, 0.55, 0.6, 1.0))
 
 	add_child(HSeparator.new())
 
 	_add_section("Vehicles")
-	var vehicles: Array[VehicleData] = Game.team_manager.vehicles
+	var vehicles: Array[VehicleData] = hq.vehicles
 	if vehicles.is_empty():
 		_add_placeholder_row("No vehicles in the fleet.")
 	else:
@@ -35,8 +39,13 @@ func populate() -> void:
 				_add_info_row(team.team_name, "At base")
 
 	add_child(HSeparator.new())
-	_add_section("Equipment")
-	_add_placeholder_row("Coming soon")
+	_add_section("Equipment (local to this base)")
+	var local_equipment: Array[EquipmentData] = hq.local_equipment
+	if local_equipment.is_empty():
+		_add_placeholder_row("No base-local equipment.")
+	else:
+		for item: EquipmentData in local_equipment:
+			add_child(_make_equipment_row(item))
 
 	add_child(HSeparator.new())
 	_add_section("Base Upgrades")
@@ -75,5 +84,28 @@ func _make_vehicle_row(vehicle: VehicleData) -> Control:
 	row.gui_input.connect(func(input_event: InputEvent) -> void:
 		if input_event is InputEventMouseButton and input_event.pressed and input_event.button_index == MOUSE_BUTTON_LEFT:
 			Game.slideout_panel.show_vehicle(vehicle))
+
+	return row
+
+
+func _make_equipment_row(item: EquipmentData) -> Control:
+	var row := HBoxContainer.new()
+	row.mouse_filter = Control.MOUSE_FILTER_STOP
+	row.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	row.add_theme_constant_override("separation", 6)
+
+	var name_lbl := Label.new()
+	name_lbl.text = item.equipment_name
+	name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(name_lbl)
+
+	var slot_lbl := Label.new()
+	slot_lbl.text = item.slot_type
+	slot_lbl.add_theme_color_override("font_color", Color(0.55, 0.55, 0.6, 1.0))
+	row.add_child(slot_lbl)
+
+	row.gui_input.connect(func(input_event: InputEvent) -> void:
+		if input_event is InputEventMouseButton and input_event.pressed and input_event.button_index == MOUSE_BUTTON_LEFT:
+			Game.slideout_panel.show_equipment_info(item))
 
 	return row

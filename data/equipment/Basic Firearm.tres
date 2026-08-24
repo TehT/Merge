@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="EquipmentData" format=3 uid="uid://c157f2f4vg71o"]
+
+[ext_resource type="Script" uid="uid://cvu5736ncd350" path="res://scripts/data/equipment/equipment_effect.gd" id="1_emt4c"]
+[ext_resource type="Script" uid="uid://ld21vox4bm1p" path="res://scripts/data/equipment/effect_stat_boost.gd" id="2_rvcv2"]
+[ext_resource type="Script" uid="uid://be0u6sn1ow0ax" path="res://scripts/data/equipment/equipment_requirement.gd" id="2_t6mig"]
+[ext_resource type="Script" uid="uid://bf2i873arrbex" path="res://scripts/data/equipment_data.gd" id="3_rvcv2"]
+[ext_resource type="Script" uid="uid://db3mehjiela4e" path="res://scripts/data/equipment/req_proficiency_rank.gd" id="4_c3aid"]
+
+[sub_resource type="Resource" id="Resource_xmbcd"]
+script = ExtResource("2_rvcv2")
+amount = 2.0
+metadata/_custom_type_script = "uid://ld21vox4bm1p"
+
+[sub_resource type="Resource" id="Resource_vtnpa"]
+script = ExtResource("4_c3aid")
+metadata/_custom_type_script = "uid://db3mehjiela4e"
+
+[resource]
+script = ExtResource("3_rvcv2")
+equipment_name = "P90"
+requirements = Array[ExtResource("2_t6mig")]([SubResource("Resource_vtnpa")])
+effects = Array[ExtResource("1_emt4c")]([SubResource("Resource_xmbcd")])

@@ -3,10 +3,11 @@ class_name TeamManager
 ## TeamManager — a persistent node in Main.tscn, referenced elsewhere via
 ## Game.team_manager (registers itself in _ready() — see game.gd). Owns
 ## the player's teams (3-5 agents each) and their cohesion. Must be listed
-## AFTER AgentManager as a sibling in Main.tscn: the starting team is
-## built from Game.agent_manager's roster in _ready(), which requires
-## AgentManager's own _ready() (where the roster is populated, and where
-## it registers itself into Game) to have already run.
+## AFTER AgentManager and BaseManager as a sibling in Main.tscn: the
+## starting team is built from Game.agent_manager's roster and placed at
+## Game.base_manager's primary base, both in _ready(), which requires
+## those managers' own _ready() (where the roster/bases are populated,
+## and where they register themselves into Game) to have already run.
 
 signal team_created(team: TeamData)
 signal cohesion_changed(team_id: String, new_value: float, delta: float)
@@ -20,19 +21,6 @@ signal team_arrived(team_id: String, event_id: String)
 @export var mission_cohesion_gain: float = 8.0
 @export var training_cohesion_gain: float = 12.0
 @export var training_days: int = 2
-
-## HQ location (lon, lat) — Berlin, Germany for now. New teams start here.
-const HQ_LOCATION := Vector2(13.405, 52.52)
-const HQ_NAME := "HQ (Berlin, Germany)"
-
-## The base's fleet, loaded from saved VehicleData resources (see
-## res://data/vehicles/). Deploying a team auto-picks the best fit from
-## here (see get_best_vehicle) rather than teams owning a fixed transport
-## — adding a new .tres here is how travel options expand later in the
-## game, no code changes needed.
-var vehicles: Array[VehicleData] = [
-	preload("res://data/vehicles/eurocopter_h225.tres"),
-]
 
 var teams: Array[TeamData] = []
 
@@ -60,8 +48,9 @@ func _create_starting_team() -> TeamData:
 	return _at_hq(TeamData.new().setup("Alpha Team", ids))
 
 func _at_hq(team: TeamData) -> TeamData:
-	team.location = HQ_LOCATION
-	team.location_name = HQ_NAME
+	var hq := Game.base_manager.get_primary_base()
+	team.location = hq.location
+	team.location_name = hq.base_name
 	return team
 
 func _on_day_advanced(_day: int) -> void:
@@ -81,13 +70,15 @@ func _process(_delta: float) -> void:
 		if team.is_traveling and now >= team.travel_arrival_day:
 			_complete_travel(team)
 
-## Picks the best fleet vehicle for a trip of this distance/team size:
-## fastest among those that can reach it and carry everyone, tie-broken by
-## lowest operation cost. Returns null if nothing in the fleet qualifies.
+## Picks the best vehicle for a trip of this distance/team size, pooled
+## across every base (see BaseManager.get_all_vehicles — a stand-in until
+## teams track a home base to search just that base's fleet): fastest
+## among those that can reach it and carry everyone, tie-broken by lowest
+## operation cost. Returns null if nothing available qualifies.
 func get_best_vehicle(distance_km: float, team_size: int) -> VehicleData:
 	var best: VehicleData = null
 	var best_hours := INF
-	for v: VehicleData in vehicles:
+	for v: VehicleData in Game.base_manager.get_all_vehicles():
 		if not v.can_reach(distance_km) or not v.can_carry(team_size):
 			continue
 		var hours := v.compute_travel_hours(distance_km)
