@@ -11,7 +11,9 @@
 [ext_resource type="Script" uid="uid://bfpc84oqgk7aw" path="res://scripts/managers/concealment_state.gd" id="8_concealmentstate"]
 [ext_resource type="Script" uid="uid://cq2wc21b23uy0" path="res://scripts/managers/agent_manager.gd" id="9_agentmanager"]
 [ext_resource type="Script" uid="uid://edkbsd6c330g" path="res://scripts/managers/event_manager.gd" id="10_eventmanager"]
+[ext_resource type="Script" uid="uid://bf2i873arrbex" path="res://scripts/data/equipment_data.gd" id="10_ma7h6"]
 [ext_resource type="Script" uid="uid://bqim33p8183g3" path="res://scripts/ui/agent_tab.gd" id="11_agenttab"]
+[ext_resource type="Resource" uid="uid://c157f2f4vg71o" path="res://data/equipment/Basic Firearm.tres" id="11_e2s0e"]
 [ext_resource type="Script" uid="uid://dbwfj2d3cmfv1" path="res://scripts/managers/resolution/stat_check_resolution_strategy.gd" id="11_yxlcp"]
 [ext_resource type="Script" uid="uid://bg7rrc2upqgsv" path="res://scripts/data/event_data.gd" id="12_2ofn6"]
 [ext_resource type="Script" uid="uid://cmn5k3mn1d2ww" path="res://scripts/managers/team_manager.gd" id="12_teammanager"]
@@ -25,7 +27,7 @@
 [ext_resource type="Script" uid="uid://dgvq56yx673qk" path="res://scripts/ui/event_map_labels.gd" id="19_eventmaplabels"]
 [ext_resource type="Script" uid="uid://bsq774q1vd22" path="res://scripts/travel_path_layer.gd" id="20_travelpathlayer"]
 [ext_resource type="Script" uid="uid://d1ppro81a3mt0" path="res://scripts/ui/equipment_tab.gd" id="21_equipmenttab"]
-[ext_resource type="Script" path="res://scripts/managers/base_manager.gd" id="22_basemanager"]
+[ext_resource type="Script" uid="uid://bj538xi1vtr46" path="res://scripts/managers/base_manager.gd" id="22_basemanager"]
 
 [sub_resource type="Resource" id="Resource_1iba3"]
 script = ExtResource("11_yxlcp")
@@ -82,9 +84,10 @@ script = ExtResource("8_concealmentstate")
 unique_name_in_owner = true
 script = ExtResource("9_agentmanager")
 
-[node name="BaseManager" type="Node" parent="." unique_id=2811577340]
+[node name="BaseManager" type="Node" parent="." unique_id=-1483389956]
 unique_name_in_owner = true
 script = ExtResource("22_basemanager")
+global_equipment = Array[ExtResource("10_ma7h6")]([ExtResource("11_e2s0e")])
 
 [node name="TeamManager" type="Node" parent="." unique_id=1533351038]
 unique_name_in_owner = true

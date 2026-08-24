@@ -177,6 +177,7 @@ func _on_team_arrived(team_id: String, event_id: String) -> void:
 			members.append(a)
 
 	var result := resolution_strategy.resolve(event, members)
+	_backfill_agent_results(members, result)
 	_apply_resolution(event, result)
 	Game.team_manager.grant_mission_cohesion(team_id)
 
@@ -201,6 +202,7 @@ func resolve_event_solo(event_id: String, agent_id: String) -> MissionResolution
 		return null
 
 	var result := resolution_strategy.resolve(event, [agent])
+	_backfill_agent_results([agent], result)
 	_apply_resolution(event, result)
 	for aid: String in result.agent_results:
 		Game.agent_manager.set_status(aid, result.agent_results[aid])
@@ -211,6 +213,17 @@ func resolve_event_solo(event_id: String, agent_id: String) -> MissionResolution
 		result.team_suitability, result.chance, result.roll,
 	])
 	return result
+
+## Fills in AVAILABLE for any squad member a resolution strategy left out
+## of agent_results. Strategies are a Strategy-pattern black box (see
+## MissionResolutionStrategy) — a future one might only ever mention
+## agents whose status actually changes, and an agent it never mentions
+## shouldn't get stranded DEPLOYED forever for it. No status change means
+## they came home safe.
+func _backfill_agent_results(members: Array[AgentData], result: MissionResolutionResult) -> void:
+	for member: AgentData in members:
+		if not result.agent_results.has(member.id):
+			result.agent_results[member.id] = AgentData.Status.AVAILABLE
 
 func _apply_resolution(event: EventData, result: MissionResolutionResult) -> void:
 	match result.outcome:

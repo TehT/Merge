@@ -52,7 +52,7 @@ func _make_deploy_row(team: TeamData, on_close: Callable) -> Control:
 			_event.geo_coordinates.y, _event.geo_coordinates.x)
 	var best_vehicle: VehicleData = Game.team_manager.get_best_vehicle(distance, available.size())
 	var in_range := best_vehicle != null
-	var can_deploy := not available.is_empty() and not team.is_traveling and in_range
+	var can_deploy := not available.is_empty() and not team.is_traveling and not team.is_on_mission and in_range
 
 	var name_lbl := Label.new()
 	name_lbl.text = "%s  (%d/%d available)" % [team.team_name, available.size(), team.member_ids.size()]
@@ -67,6 +67,17 @@ func _make_deploy_row(team: TeamData, on_close: Callable) -> Control:
 		travel_lbl.add_theme_font_size_override("font_size", 12)
 		travel_lbl.add_theme_color_override("font_color", Color(0.5, 0.6, 0.8, 1.0))
 		card.add_child(travel_lbl)
+		card.add_child(HSeparator.new())
+		return card
+
+	if team.is_on_mission:
+		var hours_left := maxf(0.0, (team.mission_ready_day - Game.game_clock.get_current_time_days()) * 24.0)
+		var mission_lbl := Label.new()
+		mission_lbl.text = "On mission at %s — %s left" % [
+			team.location_name, VehicleData.format_duration(hours_left)]
+		mission_lbl.add_theme_font_size_override("font_size", 12)
+		mission_lbl.add_theme_color_override("font_color", Color(0.5, 0.6, 0.8, 1.0))
+		card.add_child(mission_lbl)
 		card.add_child(HSeparator.new())
 		return card
 

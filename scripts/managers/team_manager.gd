@@ -59,9 +59,10 @@ func _on_day_advanced(_day: int) -> void:
 		if _training[team_id] <= 0:
 			_finish_training(team_id)
 
-## Travel arrival needs sub-day precision (a short hop shouldn't wait for
-## the next day-tick to land), so it's checked every frame here rather
-## than on day_advanced.
+## Travel arrival and on-site mission completion both need sub-day
+## precision (a short hop or a quick mission shouldn't wait for the next
+## day-tick), so both are checked every frame here rather than on
+## day_advanced.
 func _process(_delta: float) -> void:
 	if teams.is_empty():
 		return
@@ -69,6 +70,8 @@ func _process(_delta: float) -> void:
 	for team in teams:
 		if team.is_traveling and now >= team.travel_arrival_day:
 			_complete_travel(team)
+		elif team.is_on_mission and now >= team.mission_ready_day:
+			_complete_mission_work(team)
 
 ## Picks the best vehicle for a trip of this distance/team size, pooled
 ## across every base (see BaseManager.get_all_vehicles — a stand-in until
@@ -194,6 +197,25 @@ func _complete_travel(team: TeamData) -> void:
 	var event_id := team.travel_event_id
 	team.travel_event_id = ""
 	print("[TeamManager] %s arrived at %s" % [team.team_name, team.location_name])
+
+	var event: EventData = Game.event_manager.get_event_by_id(event_id) if event_id != "" else null
+	if event != null and event.mission_duration_hours > 0.0:
+		team.is_on_mission = true
+		team.mission_event_id = event_id
+		team.mission_ready_day = Game.game_clock.get_current_time_days() + event.mission_duration_hours / 24.0
+	else:
+		team_arrived.emit(team.id, event_id)
+
+## Fires once a team's on-site mission_duration_hours has elapsed — the
+## same team_arrived signal EventManager already resolves missions on,
+## just delayed past physical arrival by however long the event takes to
+## actually work. Kept as the same signal so EventManager's resolution
+## hook needs no changes for this middle leg to exist.
+func _complete_mission_work(team: TeamData) -> void:
+	team.is_on_mission = false
+	var event_id := team.mission_event_id
+	team.mission_event_id = ""
+	print("[TeamManager] %s finished working the mission at %s" % [team.team_name, team.location_name])
 	team_arrived.emit(team.id, event_id)
 
 func create_empty_team(team_name: String) -> TeamData:

@@ -45,6 +45,18 @@ var travel_return_to: Vector2 = Vector2.ZERO
 var travel_return_to_name: String = ""
 var pending_agent_results: Dictionary = {} # agent_id -> AgentData.Status
 
+## On-site mission work state — distinct from is_traveling, which only
+## covers the physical travel legs before and after this. True from the
+## moment a team physically arrives at a deployed event until
+## mission_duration_hours (EventData) has elapsed; only then does
+## TeamManager resolve the mission and start the trip home. Mirrors
+## is_traveling's shape (a bool + a fractional-day target,
+## GameClock.get_current_time_days()), just for a stationary wait instead
+## of a move.
+var is_on_mission: bool = false
+var mission_ready_day: float = 0.0
+var mission_event_id: String = ""
+
 func setup(p_name: String, ids: Array[String]) -> TeamData:
 	id = _generate_id()
 	team_name = p_name

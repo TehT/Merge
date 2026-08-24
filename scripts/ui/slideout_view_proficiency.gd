@@ -8,6 +8,7 @@ func populate(agent: AgentData, prof_key: String, on_close: Callable) -> void:
 	_add_header(prof_key.capitalize(), on_close, color, 16)
 
 	var prof_rank: int = agent.get_proficiency_ranks()[prof_key]
+	var prof_score: float = agent.get_proficiency_scores()[prof_key]
 	var rank_row := HBoxContainer.new()
 	rank_row.add_theme_constant_override("separation", 4)
 	var rank_lbl := Label.new()
@@ -24,6 +25,19 @@ func populate(agent: AgentData, prof_key: String, on_close: Callable) -> void:
 		else:
 			pip.color = Color(0.15, 0.16, 0.2, 1.0)
 		rank_row.add_child(pip)
+
+	var spacer := Control.new()
+	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	rank_row.add_child(spacer)
+
+	# Raw 0-200 score alongside the Tier — moves with every equipment
+	# effect even when the Tier itself doesn't cross a threshold.
+	var score_lbl := Label.new()
+	score_lbl.text = "%d" % int(round(prof_score))
+	score_lbl.add_theme_font_size_override("font_size", 13)
+	score_lbl.add_theme_color_override("font_color", Color(0.6, 0.6, 0.65, 1.0))
+	rank_row.add_child(score_lbl)
+
 	add_child(rank_row)
 
 	var prof_enum: SkillData.Proficiency = SkillData.PROFICIENCY_KEYS.find(prof_key)
@@ -38,8 +52,12 @@ func populate(agent: AgentData, prof_key: String, on_close: Callable) -> void:
 
 	add_child(HSeparator.new())
 
+	# Equipment-aware (EquipmentHandler.get_effective_skills), not
+	# agent.skills directly — a gear-granted virtual skill needs its own
+	# card here, and a gear-modified skill (tag/rank changes) should show
+	# its effective values, not the un-modified sheet ones.
 	var matching_skills: Array[SkillData] = []
-	for skill: SkillData in agent.skills:
+	for skill: SkillData in EquipmentHandler.get_effective_skills(agent):
 		if skill.get_proficiency_key() == prof_key:
 			matching_skills.append(skill)
 

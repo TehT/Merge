@@ -47,6 +47,13 @@ enum Status { ACTIVE, DEPLOYED, RESOLVED_SUCCESS, RESOLVED_PARTIAL, RESOLVED_FAI
 @export var time_limit_days: int = 3
 var days_remaining: int = 3
 
+## How long a deployed team spends actively working this event on-site
+## once they arrive, before heading home — the middle leg of travel +
+## mission + travel back (see TeamManager). Hours, matching how travel
+## time is already expressed/displayed elsewhere — most missions should
+## be well under a full day.
+@export var mission_duration_hours: float = 2.0
+
 ## ── Proficiency Requirements ───────────────────────────────────────────────
 ## Each value is a required proficiency rank (0-10). 0 means that
 ## proficiency is irrelevant. Compared against agent/team proficiency

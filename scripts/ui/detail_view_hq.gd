@@ -35,6 +35,10 @@ func populate() -> void:
 				var hours_left := maxf(0.0, (team.travel_arrival_day - Game.game_clock.get_current_time_days()) * 24.0)
 				_add_info_row(team.team_name, "En route to %s (%s)" % [
 					team.travel_destination_name, VehicleData.format_duration(hours_left)])
+			elif team.is_on_mission:
+				var hours_left := maxf(0.0, (team.mission_ready_day - Game.game_clock.get_current_time_days()) * 24.0)
+				_add_info_row(team.team_name, "On mission at %s (%s left)" % [
+					team.location_name, VehicleData.format_duration(hours_left)])
 			else:
 				_add_info_row(team.team_name, "At base")
 

@@ -10,9 +10,10 @@ func populate(agent: AgentData) -> void:
 
 	_add_section("Proficiencies")
 	var ranks := agent.get_proficiency_ranks()
+	var scores := agent.get_proficiency_scores()
 	for key: String in SkillData.PROFICIENCY_KEYS:
-		if ranks[key] > 0:
-			_add_clickable_prof_rank(key, ranks[key], SkillData.PROFICIENCY_COLORS[key], agent)
+		if ranks[key] > 0 or scores[key] > 0.0:
+			_add_clickable_prof_rank(key, ranks[key], scores[key], SkillData.PROFICIENCY_COLORS[key], agent)
 
 	add_child(HSeparator.new())
 
@@ -79,7 +80,7 @@ func _add_clickable_slot(slot_type: String, equipped: EquipmentData, agent: Agen
 	add_child(row)
 
 
-func _add_clickable_prof_rank(prof_key: String, rank: int, color: Color, agent: AgentData) -> void:
+func _add_clickable_prof_rank(prof_key: String, rank: int, score: float, color: Color, agent: AgentData) -> void:
 	var row := HBoxContainer.new()
 	row.mouse_filter = Control.MOUSE_FILTER_STOP
 	row.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
@@ -108,6 +109,19 @@ func _add_clickable_prof_rank(prof_key: String, rank: int, color: Color, agent: 
 			pip.color = Color(0.15, 0.16, 0.2, 1.0)
 		pips.add_child(pip)
 	row.add_child(pips)
+
+	# Raw 0-200 score alongside the Tier pips — the pips only move when a
+	# rank threshold is crossed, so a modest equipment bonus (a +4 stat
+	# boost, say) can otherwise be completely invisible here even though
+	# it's already affecting suitability. The number always moves.
+	var score_lbl := Label.new()
+	score_lbl.text = "%d" % int(round(score))
+	score_lbl.custom_minimum_size.x = 32
+	score_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	score_lbl.add_theme_font_size_override("font_size", 12)
+	score_lbl.add_theme_color_override("font_color", Color(0.6, 0.6, 0.65, 1.0))
+	score_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(score_lbl)
 
 	var arrow := Label.new()
 	arrow.text = "›"
