@@ -1,13 +1,53 @@
 [gd_resource type="Resource" script_class="EventData" format=3 uid="uid://crtowpara5a43"]
 
 [ext_resource type="Script" uid="uid://bg7rrc2upqgsv" path="res://scripts/data/event_data.gd" id="1_evtdata"]
+[ext_resource type="Script" uid="uid://bexp6stpjfcaq" path="res://scripts/data/mission_phases/mission_phase.gd" id="1_q3q6b"]
+[ext_resource type="Script" uid="uid://cxtwlbc5rt7tc" path="res://scripts/data/mission_check.gd" id="2_qeeke"]
+[ext_resource type="Script" uid="uid://dj5jpx7on50q" path="res://scripts/data/mission_phases/single_phase.gd" id="3_eepib"]
+[ext_resource type="Script" uid="uid://dbwfj2d3cmfv1" path="res://scripts/managers/resolution/stat_check_resolution_strategy.gd" id="4_c1frs"]
+[ext_resource type="Script" uid="uid://br77836g17ett" path="res://scripts/data/mission_phases/choice_phase.gd" id="5_s2qy2"]
+
+[sub_resource type="Resource" id="Resource_qeeke"]
+script = ExtResource("2_qeeke")
+check_name = "Secure"
+req_ingenuity = 1
+target_ingenuity = 5.0
+
+[sub_resource type="Resource" id="Resource_fcxvj"]
+script = ExtResource("3_eepib")
+check = SubResource("Resource_qeeke")
+metadata/_custom_type_script = "uid://dj5jpx7on50q"
+
+[sub_resource type="Resource" id="Resource_q3q6b"]
+script = ExtResource("4_c1frs")
+metadata/_custom_type_script = "uid://dbwfj2d3cmfv1"
+
+[sub_resource type="Resource" id="Resource_dshai"]
+script = ExtResource("2_qeeke")
+check_name = "Sneeky Deeky"
+req_subterfuge = 2
+resolution_strategy = SubResource("Resource_q3q6b")
+
+[sub_resource type="Resource" id="Resource_r4riu"]
+script = ExtResource("4_c1frs")
+metadata/_custom_type_script = "uid://dbwfj2d3cmfv1"
+
+[sub_resource type="Resource" id="Resource_ccg70"]
+script = ExtResource("2_qeeke")
+check_name = "Guns Balzing"
+req_combat = 2
+resolution_strategy = SubResource("Resource_r4riu")
+
+[sub_resource type="Resource" id="Resource_uuc2w"]
+script = ExtResource("5_s2qy2")
+trigger = 2
+checks = Array[ExtResource("2_qeeke")]([SubResource("Resource_dshai"), SubResource("Resource_ccg70")])
+phase_name = null
+metadata/_custom_type_script = "uid://br77836g17ett"
 
 [resource]
 script = ExtResource("1_evtdata")
 mission_duration_hours = 6.0
-req_attunement = 2
-req_erudition = 1
-req_ingenuity = 1
-tags = ["[arcane]"]
 escalates_to = 3
 can_escalate = true
+phases = Array[ExtResource("1_q3q6b")]([SubResource("Resource_fcxvj"), SubResource("Resource_uuc2w")])

@@ -55,14 +55,16 @@ var days_remaining: int = 3
 @export var mission_duration_hours: float = 2.0
 
 ## ── Proficiency Requirements ───────────────────────────────────────────────
-## Each value is a required proficiency rank (0-10). 0 means that
-## proficiency is irrelevant. This is the HARD PREREQUISITE — a gate
-## checked against a team's actual aggregated rank, not a ratio target.
-## StatCheckResolutionStrategy still uses it as its ratio denominator too
-## (rank / req); TagBreadthResolutionStrategy uses it only as the gate and
-## compares its own continuous totals against target_* below instead —
-## see TagBreadthResolutionStrategy.missing_prereq_penalty for what
-## happens when a required category's rank doesn't clear this.
+## Each value is a rough required proficiency rank (0-10), 0 meaning that
+## proficiency isn't relevant. This is no longer what resolution actually
+## checks — every event resolves through phases (see the Multi-Stage
+## Missions group below), and each phase's own MissionCheck carries the
+## real req_*/target_*/tags that its resolution strategy reads. This
+## top-level copy is a coarse, spawn-time/UI-facing summary — difficulty
+## scaling on spawn (see EventManager.spawn_random_event), escalation rank
+## bumps, and the deploy screen's match% preview all read it, but nothing
+## resolves against it directly. Leave it at 0 for an event whose phases
+## don't want a summary shown.
 
 @export_group("Proficiency Requirements")
 @export_range(0, 10) var req_combat: int = 0
@@ -71,23 +73,6 @@ var days_remaining: int = 3
 @export_range(0, 10) var req_erudition: int = 0
 @export_range(0, 10) var req_influence: int = 0
 @export_range(0, 10) var req_ingenuity: int = 0
-
-## ── Target Values ───────────────────────────────────────────────────────────
-## Continuous per-category targets for resolution strategies that produce
-## a continuous total rather than a discrete rank (currently just
-## TagBreadthResolutionStrategy's tag-weighted totals) — separate from
-## req_* above, which stays the hard rank prerequisite regardless of
-## which strategy is active. Left at 0 (unset), a category falls back to
-## its own req_* value as the target, so existing/new events work without
-## needing explicit tuning — see get_target_values().
-
-@export_group("Target Values")
-@export var target_combat: float = 0.0
-@export var target_subterfuge: float = 0.0
-@export var target_attunement: float = 0.0
-@export var target_erudition: float = 0.0
-@export var target_influence: float = 0.0
-@export var target_ingenuity: float = 0.0
 
 func set_proficiency_profile(combat: int, subterfuge: int, attunement: int,
 		erudition: int, influence: int, ingenuity: int) -> void:
@@ -106,18 +91,6 @@ func get_proficiency_requirements() -> Dictionary:
 		"erudition": req_erudition,
 		"influence": req_influence,
 		"ingenuity": req_ingenuity,
-	}
-
-## Per-category continuous targets, each falling back to its own req_*
-## value when left unset (0) — see the Target Values group comment above.
-func get_target_values() -> Dictionary:
-	return {
-		"combat": target_combat if target_combat > 0.0 else float(req_combat),
-		"subterfuge": target_subterfuge if target_subterfuge > 0.0 else float(req_subterfuge),
-		"attunement": target_attunement if target_attunement > 0.0 else float(req_attunement),
-		"erudition": target_erudition if target_erudition > 0.0 else float(req_erudition),
-		"influence": target_influence if target_influence > 0.0 else float(req_influence),
-		"ingenuity": target_ingenuity if target_ingenuity > 0.0 else float(req_ingenuity),
 	}
 
 func get_skill_requirements() -> Dictionary:
@@ -143,20 +116,6 @@ func get_required_rank_count() -> int:
 func get_total_difficulty() -> int:
 	return req_combat + req_subterfuge + req_attunement + req_erudition \
 		+ req_influence + req_ingenuity
-
-## ── Tags ────────────────────────────────────────────────────────────────────
-## Event tags interact with agent skill tags — a tag here can counter
-## agent skills that share the same tag, reducing effective proficiency.
-
-@export_group("Tags")
-@export var tags: PackedStringArray = []
-
-## Counter-tags: agent skills with these tags are negated for this event.
-## e.g. ["Melee"] means skills tagged [Melee] contribute nothing.
-@export var counter_tags: PackedStringArray = []
-
-func has_tag(tag: String) -> bool:
-	return tag in tags
 
 ## ── Stakes ──────────────────────────────────────────────────────────────────
 
@@ -190,12 +149,14 @@ func has_tag(tag: String) -> bool:
 @export var decision_option_consequence_keys: PackedStringArray = []
 
 ## ── Multi-Stage Missions ────────────────────────────────────────────────────
-## An empty phases array (the default) means this event resolves the old
-## way — a single resolution_strategy.resolve(event, squad) call. A
-## non-empty array hands resolution off to MissionPhaseRunner instead,
-## which runs each phase in order and merges their results; the top-level
-## req_*/target_*/tags fields above are then unused (each phase's own
-## MissionCheck carries its own).
+## Every event resolves through its phases, run in order by
+## MissionPhaseRunner — there's no separate flat/single-check resolution
+## path anymore. A simple, single-check mission is just a one-element
+## phases array holding one SinglePhase (with one MissionCheck); a longer
+## mission adds more phases (SinglePhase and/or ChoicePhase). An empty
+## phases array resolves nothing — MissionPhaseRunner returns an inert
+## default result and logs a warning, so treat it as a content bug, not a
+## valid "no phases" event.
 
 @export_group("Multi-Stage Missions")
 @export var phases: Array[MissionPhase] = []

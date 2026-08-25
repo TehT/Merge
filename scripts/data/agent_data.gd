@@ -172,6 +172,3 @@ func get_status_name() -> String:
 
 func is_available() -> bool:
 	return status == Status.AVAILABLE
-
-func compute_suitability(event: EventData) -> float:
-	return MissionResolver.compute_rank_coverage(get_proficiency_ranks(event.tags), event)

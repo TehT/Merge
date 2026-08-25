@@ -11,16 +11,18 @@ class_name SlideoutPanel
 ## squad picker for deploying a team to an event (clicking "Deploy Team"),
 ## a vehicle info card (clicking a fleet vehicle in the HQ panel), a
 ## read-only equipment info card (clicking a locker item in the Equipment
-## tab), and the equip/unequip picker for one of an agent's equipment
-## slots (clicking a slot in the agent sheet).
+## tab), the equip/unequip picker for one of an agent's equipment
+## slots (clicking a slot in the agent sheet), and the event log (the
+## small button below the left sidebar toggle).
 
 const SlideoutViewProficiency := preload("res://scripts/ui/slideout_view_proficiency.gd")
 const SlideoutViewDeploy := preload("res://scripts/ui/slideout_view_deploy.gd")
 const SlideoutViewVehicle := preload("res://scripts/ui/slideout_view_vehicle.gd")
 const SlideoutViewEquipment := preload("res://scripts/ui/slideout_view_equipment.gd")
 const SlideoutViewEquipSlot := preload("res://scripts/ui/slideout_view_equip_slot.gd")
+const SlideoutViewEventLog := preload("res://scripts/ui/slideout_view_event_log.gd")
 
-enum _Mode { NONE, PROFICIENCY, DEPLOY, VEHICLE, EQUIPMENT_INFO, EQUIP_SLOT }
+enum _Mode { NONE, PROFICIENCY, DEPLOY, VEHICLE, EQUIPMENT_INFO, EQUIP_SLOT, EVENT_LOG }
 
 var _content: VBoxContainer
 var _mode: _Mode = _Mode.NONE
@@ -129,6 +131,19 @@ func show_equip_slot(agent: AgentData, slot_type: String) -> void:
 	var view: VBoxContainer = SlideoutViewEquipSlot.new()
 	_content.add_child(view)
 	view.populate(agent, slot_type, dismiss)
+	visible = true
+
+
+func show_event_log() -> void:
+	if _mode == _Mode.EVENT_LOG and visible:
+		dismiss()
+		return
+
+	_mode = _Mode.EVENT_LOG
+	_clear_content()
+	var view: VBoxContainer = SlideoutViewEventLog.new()
+	_content.add_child(view)
+	view.populate(dismiss)
 	visible = true
 
 

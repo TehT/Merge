@@ -23,10 +23,17 @@ extends RefCounted
 ## team_suitability don't have one clean meaning across several phases,
 ## so they're left at their MissionResolutionResult defaults; the
 ## per-phase numbers live in log_lines instead.
+##
+## A coroutine — a PLAYER_CHOICE ChoicePhase suspends resolution to await
+## the player's pick (see ChoicePhase.resolve()), so every call site must
+## `await` this, even though most missions (no PLAYER_CHOICE phase)
+## resolve synchronously in practice. Callers: EventManager, whenever
+## event.phases isn't empty.
 
 static func resolve(phases: Array[MissionPhase], squad: Array[AgentData]) -> MissionResolutionResult:
 	var result := MissionResolutionResult.new()
 	if phases.is_empty():
+		push_warning("[MissionPhaseRunner] resolve() called with an empty phases array — nothing to run.")
 		return result
 
 	var log: PackedStringArray = []
@@ -38,7 +45,9 @@ static func resolve(phases: Array[MissionPhase], squad: Array[AgentData]) -> Mis
 	for i in range(phases.size()):
 		var phase: MissionPhase = phases[i]
 		var label := phase.phase_name if phase.phase_name != "" else "Phase %d" % (i + 1)
-		var phase_result := phase.resolve(squad, previous_outcome)
+		# log so far (everything from earlier phases) — passed by reference,
+		# safe because resolve() only ever reads it (see MissionChoiceDialog).
+		var phase_result: MissionPhaseResult = await phase.resolve(squad, previous_outcome, log)
 
 		if phase_result == null or not phase_result.ran:
 			log.append("[%s] skipped" % label)

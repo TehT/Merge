@@ -6,8 +6,14 @@ extends MissionPhase
 
 @export var check: MissionCheck
 
-func resolve(squad: Array[AgentData],
-		_previous_outcome: MissionResolutionResult.Outcome) -> MissionPhaseResult:
+func get_checks() -> Array[MissionCheck]:
+	var result: Array[MissionCheck] = []
+	if check != null:
+		result.append(check)
+	return result
+
+func resolve(squad: Array[AgentData], _previous_outcome: MissionResolutionResult.Outcome,
+		_log_so_far: PackedStringArray = PackedStringArray()) -> MissionPhaseResult:
 	var result := MissionPhaseResult.new()
 	if check == null:
 		push_error("SinglePhase '%s' has no check assigned" % phase_name)

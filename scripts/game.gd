@@ -7,7 +7,9 @@ var agent_manager: AgentManager
 var base_manager: BaseManager
 var team_manager: TeamManager
 var event_manager: EventManager
+var event_log: EventLog
 var geo_data: GeoData
 
 var detail_sidebar: DetailSidebar
 var slideout_panel: SlideoutPanel
+var mission_choice_dialog: MissionChoiceDialog

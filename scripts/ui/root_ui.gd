@@ -14,6 +14,7 @@ var _right_open := true
 func _ready() -> void:
 	$LeftToggle.pressed.connect(_toggle_left)
 	$RightToggle.pressed.connect(_toggle_right)
+	%EventLogToggle.pressed.connect(func() -> void: Game.slideout_panel.show_event_log())
 
 	%SquadList.agent_selected.connect(_on_agent_selected)
 	%SquadList.team_selected.connect(_on_team_selected)

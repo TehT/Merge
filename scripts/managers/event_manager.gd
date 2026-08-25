@@ -17,17 +17,6 @@ var magic_intensity: float = 1.0
 @export var magic_intensity_growth_per_day: float = 0.02
 @export var base_spawn_chance_per_day: float = 0.35
 
-## The "black box" mission resolver — Strategy pattern (see
-## scripts/managers/resolution/). A live default instance (rather than
-## null) so the Inspector shows a populated, expandable resource on this
-## node from the start — an unset Resource-typed @export shows as
-## "[empty]" with nothing to click into. Swap it in the Inspector (drag in
-## a different strategy .tres, or use the dropdown arrow to pick "New
-## GauntletResolutionStrategy" once one exists), or reassign it at
-## runtime (Game.event_manager.resolution_strategy = X.new()), without
-## touching any of the spawn/travel/arrival logic below.
-@export var resolution_strategy: MissionResolutionStrategy = StatCheckResolutionStrategy.new()
-
 @onready var _geo_data: GeoData = Game.geo_data
 
 ## Spawn pool, loaded from saved EventData resources (see
@@ -46,8 +35,6 @@ var magic_intensity: float = 1.0
 
 func _ready() -> void:
 	Game.event_manager = self
-	if resolution_strategy == null:
-		resolution_strategy = StatCheckResolutionStrategy.new()
 	Game.game_clock.day_advanced.connect(_on_day_advanced)
 	Game.team_manager.team_arrived.connect(_on_team_arrived)
 
@@ -159,6 +146,10 @@ func deploy_team(event_id: String, team_id: String, vehicle_override: VehicleDat
 	event.status = EventData.Status.DEPLOYED
 	return plan
 
+## A coroutine — MissionPhaseRunner.resolve() may suspend to await a
+## PLAYER_CHOICE pick mid-mission (see ChoicePhase), which is fine here:
+## Godot signal callbacks can be async, and nothing else needs this
+## function's result synchronously (team_arrived is fire-and-forget).
 func _on_team_arrived(team_id: String, event_id: String) -> void:
 	if event_id == "":
 		return # team wasn't traveling for a mission (shouldn't happen, but be safe)
@@ -176,17 +167,15 @@ func _on_team_arrived(team_id: String, event_id: String) -> void:
 		if a != null and a.status == AgentData.Status.DEPLOYED:
 			members.append(a)
 
-	var result := MissionPhaseRunner.resolve(event.phases, members) if not event.phases.is_empty() \
-			else resolution_strategy.resolve(event, members)
+	var result: MissionResolutionResult = await MissionPhaseRunner.resolve(event.phases, members)
 	_backfill_agent_results(members, result)
 	_apply_resolution(event, result)
 	Game.team_manager.grant_mission_cohesion(team_id)
 
-	# Agents keep their DEPLOYED status until the team is physically back —
-	# their real outcome (available/injured/KIA) applies on the return leg.
-	team.pending_agent_results = result.agent_results.duplicate()
-	Game.team_manager.begin_return_travel(team_id)
-
+	# Resolution is reported (event_resolved + log) before the team is sent
+	# on its way home — begin_return_travel() below fires team_departed
+	# synchronously, and that "set out for home" entry should land in the
+	# event log after "resolved", not before it.
 	event_resolved.emit(event, team.team_name, result)
 	print("[EventManager] %s resolved %s -> %s (suitability=%.2f chance=%.2f roll=%.2f)" % [
 		team.team_name, event.title, MissionResolutionResult.outcome_name(result.outcome),
@@ -194,6 +183,12 @@ func _on_team_arrived(team_id: String, event_id: String) -> void:
 	])
 	_print_resolution_log(result)
 
+	# Agents keep their DEPLOYED status until the team is physically back —
+	# their real outcome (available/injured/KIA) applies on the return leg.
+	team.pending_agent_results = result.agent_results.duplicate()
+	Game.team_manager.begin_return_travel(team_id)
+
+## A coroutine (see _on_team_arrived) — callers must `await` this.
 func resolve_event_solo(event_id: String, agent_id: String) -> MissionResolutionResult:
 	var event := get_event_by_id(event_id)
 	if event == null:
@@ -203,8 +198,7 @@ func resolve_event_solo(event_id: String, agent_id: String) -> MissionResolution
 	if agent == null or not agent.is_available():
 		return null
 
-	var result := MissionPhaseRunner.resolve(event.phases, [agent]) if not event.phases.is_empty() \
-			else resolution_strategy.resolve(event, [agent])
+	var result: MissionResolutionResult = await MissionPhaseRunner.resolve(event.phases, [agent])
 	_backfill_agent_results([agent], result)
 	_apply_resolution(event, result)
 	for aid: String in result.agent_results:

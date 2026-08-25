@@ -89,7 +89,7 @@ func _make_deploy_row(team: TeamData, on_close: Callable) -> Control:
 		match_lbl.text = "No members available"
 		match_lbl.add_theme_color_override("font_color", Color(0.5, 0.5, 0.55, 1.0))
 	else:
-		var suitability := MissionResolver.compute_team_suitability(_event, available)
+		var suitability := MissionResolver.compute_mission_suitability(_event.phases, available)
 		var pct := int(round(suitability * 100.0))
 		match_lbl.text = "Match: %d%%" % pct
 		if suitability >= 1.0:

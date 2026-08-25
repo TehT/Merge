@@ -13,22 +13,36 @@ extends MissionPhase
 ##                   way RANDOM does.
 ##   RANDOM        — always activates; picks one of checks uniformly at
 ##                   random.
-##   PLAYER_CHOICE — always activates; SHOULD let the player pick which
-##                   check to attempt. There's no mid-mission choice UI
-##                   yet (resolution is currently synchronous — pausing
-##                   for player input mid-resolve() is a different kind
-##                   of problem than anything else in this pipeline), so
-##                   this is a stub: it auto-picks the first listed check.
-##                   Deliberately not silently identical to RANDOM, so
-##                   it's easy to grep for when the real UI gets built.
+##   PLAYER_CHOICE — always activates; pauses mission resolution and asks
+##                   the player which check to attempt, via
+##                   MissionChoiceDialog (Game.mission_choice_dialog) —
+##                   see resolve() below. player_choice_picker lets tests
+##                   (or any other caller) supply a different picker
+##                   without touching UI/await plumbing.
 
 enum Trigger { FAILURE, RANDOM, PLAYER_CHOICE }
 
 @export var trigger: Trigger = Trigger.RANDOM
 @export var checks: Array[MissionCheck] = []
 
-func resolve(squad: Array[AgentData],
-		previous_outcome: MissionResolutionResult.Outcome) -> MissionPhaseResult:
+## Overrides how PLAYER_CHOICE resolves its pick. Must be a Callable
+## accepting (ChoicePhase, PackedStringArray) and returning a MissionCheck
+## (awaitable — may itself be a coroutine). Left invalid in normal play,
+## which falls back to Game.mission_choice_dialog.request_choice(); tests
+## can assign a synchronous stand-in here to avoid needing a real UI/
+## Signal round-trip. Not @export — this is a runtime/test hook, not
+## authored content.
+var player_choice_picker: Callable = Callable()
+
+func get_checks() -> Array[MissionCheck]:
+	return checks
+
+## May suspend (via `await`) when trigger is PLAYER_CHOICE — always call
+## with `await`, even for the other triggers, which resolve synchronously
+## in practice but still live behind the same coroutine-shaped signature
+## (see MissionPhase.resolve()).
+func resolve(squad: Array[AgentData], previous_outcome: MissionResolutionResult.Outcome,
+		log_so_far: PackedStringArray = PackedStringArray()) -> MissionPhaseResult:
 	var result := MissionPhaseResult.new()
 
 	if trigger == Trigger.FAILURE and previous_outcome != MissionResolutionResult.Outcome.FAILURE:
@@ -40,7 +54,7 @@ func resolve(squad: Array[AgentData],
 		result.ran = false
 		return result
 
-	var chosen := _pick_check()
+	var chosen: MissionCheck = await _pick_check(log_so_far)
 	var check_result := chosen.resolve(squad)
 	result.outcome = check_result.outcome
 	result.agent_results = check_result.agent_results
@@ -48,7 +62,9 @@ func resolve(squad: Array[AgentData],
 	return result
 
 
-func _pick_check() -> MissionCheck:
+func _pick_check(log_so_far: PackedStringArray) -> MissionCheck:
 	if trigger == Trigger.PLAYER_CHOICE:
-		return checks[0] # stub — see class comment
+		var picker := player_choice_picker if player_choice_picker.is_valid() \
+				else Callable(Game.mission_choice_dialog, "request_choice")
+		return await picker.call(self, log_so_far)
 	return checks[randi() % checks.size()]

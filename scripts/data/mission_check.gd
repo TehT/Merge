@@ -1,11 +1,12 @@
 class_name MissionCheck
 extends Resource
 ## MissionCheck — the proficiency/tag profile one resolvable check within
-## a mission phase needs, and which MissionResolutionStrategy resolves
-## it. The phase-scoped analog of EventData's requirement/target/tag
-## fields, without the event-level concerns (location, rewards,
-## escalation, decision prompts, ...) that don't apply to a single check
-## — a phase's check is much narrower than a whole event.
+## a mission phase needs, and the actual unit every MissionResolutionStrategy
+## resolves against (EventData no longer is — see EventData's Proficiency
+## Requirements group). Holds requirement/target/tag fields plus its own
+## resolution_strategy, without the event-level concerns (location,
+## rewards, escalation, decision prompts, ...) that don't apply to a
+## single check.
 
 @export var check_name: String = ""
 
@@ -29,35 +30,35 @@ extends Resource
 @export var tags: PackedStringArray = []
 @export var counter_tags: PackedStringArray = []
 
-## Which MissionResolutionStrategy resolves this check. Defaults to
-## StatCheckResolutionStrategy if left unassigned, same live-default
-## reasoning as EventManager.resolution_strategy — an unset Resource-typed
-## @export shows as "[empty]" with nothing to click into otherwise.
+## Which MissionResolutionStrategy resolves this check. Defaults to a live
+## instance rather than null so the Inspector shows a populated,
+## expandable resource from the start — an unset Resource-typed @export
+## shows as "[empty]" with nothing to click into otherwise.
 @export var resolution_strategy: MissionResolutionStrategy = StatCheckResolutionStrategy.new()
 
-## Builds a throwaway EventData carrying just this check's requirement/
-## target/tag fields, for handing to resolution_strategy.resolve() — the
-## Strategy pattern contract is (EventData, Array[AgentData]), and this
-## keeps that contract completely unchanged for every existing and future
-## strategy rather than widening it just for phases.
-func to_event_data() -> EventData:
-	var e := EventData.new()
-	e.req_combat = req_combat
-	e.req_subterfuge = req_subterfuge
-	e.req_attunement = req_attunement
-	e.req_erudition = req_erudition
-	e.req_influence = req_influence
-	e.req_ingenuity = req_ingenuity
-	e.target_combat = target_combat
-	e.target_subterfuge = target_subterfuge
-	e.target_attunement = target_attunement
-	e.target_erudition = target_erudition
-	e.target_influence = target_influence
-	e.target_ingenuity = target_ingenuity
-	e.tags = tags
-	e.counter_tags = counter_tags
-	return e
+func get_proficiency_requirements() -> Dictionary:
+	return {
+		"combat": req_combat,
+		"subterfuge": req_subterfuge,
+		"attunement": req_attunement,
+		"erudition": req_erudition,
+		"influence": req_influence,
+		"ingenuity": req_ingenuity,
+	}
+
+## Per-category continuous targets, each falling back to its own req_*
+## value when left unset (0), so a check works without needing explicit
+## target tuning.
+func get_target_values() -> Dictionary:
+	return {
+		"combat": target_combat if target_combat > 0.0 else float(req_combat),
+		"subterfuge": target_subterfuge if target_subterfuge > 0.0 else float(req_subterfuge),
+		"attunement": target_attunement if target_attunement > 0.0 else float(req_attunement),
+		"erudition": target_erudition if target_erudition > 0.0 else float(req_erudition),
+		"influence": target_influence if target_influence > 0.0 else float(req_influence),
+		"ingenuity": target_ingenuity if target_ingenuity > 0.0 else float(req_ingenuity),
+	}
 
 func resolve(squad: Array[AgentData]) -> MissionResolutionResult:
 	var strategy := resolution_strategy if resolution_strategy != null else StatCheckResolutionStrategy.new()
-	return strategy.resolve(to_event_data(), squad)
+	return strategy.resolve(self, squad)

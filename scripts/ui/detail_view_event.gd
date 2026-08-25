@@ -33,14 +33,11 @@ func populate(ev: EventData) -> void:
 		_add_info_row("Coords", "%s, %s" % [lat_str, lon_str])
 
 	_add_info_row("Days Left", "%d" % ev.days_remaining)
+	_add_info_row("Phases", "%d" % ev.phases.size())
 
 	add_child(HSeparator.new())
 
-	_add_section("Requirements")
-	var reqs := ev.get_proficiency_requirements()
-	for key: String in SkillData.PROFICIENCY_KEYS:
-		if reqs[key] > 0:
-			_add_prof_rank_row(key, reqs[key], SkillData.PROFICIENCY_COLORS[key])
+	_add_phase_requirements(ev)
 
 	add_child(HSeparator.new())
 
@@ -54,6 +51,59 @@ func populate(ev: EventData) -> void:
 	_add_info_row("Intel", "+%d" % ev.reward_intel)
 	if ev.reward_item != "":
 		_add_info_row("Item", ev.reward_item)
+
+
+## Per-phase requirement breakdown — each phase gets its own header (with a
+## trigger note for ChoicePhase), and each of its checks (just one for
+## SinglePhase, every option for ChoicePhase since only one runs and which
+## isn't known ahead of time) gets its own labeled proficiency-rank rows.
+func _add_phase_requirements(ev: EventData) -> void:
+	_add_section("Requirements  (%d phase%s)" % [ev.phases.size(), "" if ev.phases.size() == 1 else "s"])
+
+	if ev.phases.is_empty():
+		_add_placeholder_row("No phases configured")
+		return
+
+	for i in range(ev.phases.size()):
+		var phase: MissionPhase = ev.phases[i]
+		var phase_label := phase.phase_name if phase.phase_name != "" else "Phase %d" % (i + 1)
+
+		var phase_lbl := Label.new()
+		phase_lbl.text = "%d. %s%s" % [i + 1, phase_label, _phase_trigger_note(phase)]
+		phase_lbl.add_theme_font_size_override("font_size", 13)
+		phase_lbl.add_theme_color_override("font_color", Color(0.75, 0.77, 0.85, 1.0))
+		add_child(phase_lbl)
+
+		var checks := phase.get_checks()
+		if checks.is_empty():
+			_add_placeholder_row("No checks configured")
+			continue
+
+		for check: MissionCheck in checks:
+			if checks.size() > 1:
+				var opt_lbl := Label.new()
+				opt_lbl.text = "Option: %s" % (check.check_name if check.check_name != "" else "Unnamed")
+				opt_lbl.add_theme_font_size_override("font_size", 12)
+				opt_lbl.add_theme_color_override("font_color", Color(0.55, 0.55, 0.6, 1.0))
+				add_child(opt_lbl)
+
+			var reqs := check.get_proficiency_requirements()
+			var any_req := false
+			for key: String in SkillData.PROFICIENCY_KEYS:
+				if reqs[key] > 0:
+					any_req = true
+					_add_prof_rank_row(key, reqs[key], SkillData.PROFICIENCY_COLORS[key])
+			if not any_req:
+				_add_placeholder_row("No proficiency requirement")
+
+
+func _phase_trigger_note(phase: MissionPhase) -> String:
+	if phase is ChoicePhase:
+		match (phase as ChoicePhase).trigger:
+			ChoicePhase.Trigger.FAILURE: return "  (if previous phase fails)"
+			ChoicePhase.Trigger.RANDOM: return "  (random choice)"
+			ChoicePhase.Trigger.PLAYER_CHOICE: return "  (player choice)"
+	return ""
 
 
 func _create_event_map(ev: EventData) -> Control:

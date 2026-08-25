@@ -7,15 +7,15 @@ extends MissionResolutionStrategy
 ## that stacks copies of the same angle. Two passes:
 ##
 ## 1. Modifier Pass — before pooling, every skill's rank is adjusted
-##    against the event's own tags:
-##      - Countered: the skill shares a tag with event.counter_tags ->
+##    against the check's own tags:
+##      - Countered: the skill shares a tag with check.counter_tags ->
 ##        effective rank 0 (contributes nothing). This is the first real
 ##        use of counter_tags anywhere in resolution.
-##      - Exploited: the skill shares a tag with event.tags (the event's
-##        general context tags — there's no separate "hazard" field in
-##        EventData, so this reads that as the closest existing concept)
-##        -> effective rank + 1. Counter takes priority over exploit if a
-##        skill somehow matches both.
+##      - Exploited: the skill shares a tag with check.tags (the check's
+##        general context tags — there's no separate "hazard" field, so
+##        this reads that as the closest existing concept) -> effective
+##        rank + 1. Counter takes priority over exploit if a skill somehow
+##        matches both.
 ##
 ## 2. Redundancy Pass — group each category's (modified) skills by tag;
 ##    within a tag group, sort by effective rank descending and weight
@@ -37,7 +37,7 @@ extends MissionResolutionStrategy
 ##        specialists would.
 ##    Every tag's weighted total is summed into one continuous "total
 ##    party proficiency value" per category (not a discrete 0-10 rank),
-##    which is compared against that category's target (EventData.
+##    which is compared against that category's target (MissionCheck.
 ##    get_target_values() — a separate, continuous-scale field from req_*,
 ##    falling back to req_*'s own value if unset) via
 ##    MissionResolver.compute_value_coverage() — the literal reading of
@@ -69,9 +69,9 @@ extends MissionResolutionStrategy
 @export_range(0.0, 1.0) var missing_prereq_penalty: float = 0.75
 
 
-func resolve(event: EventData, squad: Array[AgentData]) -> MissionResolutionResult:
-	var computed := _compute_suitability(event, squad)
-	var prereq := _compute_prereq_multiplier(event, squad)
+func resolve(check: MissionCheck, squad: Array[AgentData]) -> MissionResolutionResult:
+	var computed := _compute_suitability(check, squad)
+	var prereq := _compute_prereq_multiplier(check, squad)
 	var log: PackedStringArray = computed["log"]
 	for line: String in prereq["log"]:
 		log.append(line)
@@ -84,9 +84,9 @@ func resolve(event: EventData, squad: Array[AgentData]) -> MissionResolutionResu
 ## strategy's own tag-weighted totals) against each required category's
 ## hard req_* prerequisite. Returns {"multiplier": float, "log":
 ## PackedStringArray} — multiplier is 1.0 if every prerequisite is met.
-func _compute_prereq_multiplier(event: EventData, squad: Array[AgentData]) -> Dictionary:
-	var team_ranks := MissionResolver.compute_team_ranks(squad, event.tags)
-	var reqs := event.get_proficiency_requirements()
+func _compute_prereq_multiplier(check: MissionCheck, squad: Array[AgentData]) -> Dictionary:
+	var team_ranks := MissionResolver.compute_team_ranks(squad, check.tags)
+	var reqs := check.get_proficiency_requirements()
 	var multiplier := 1.0
 	var log: PackedStringArray = []
 	for key: String in SkillData.PROFICIENCY_KEYS:
@@ -104,7 +104,7 @@ func _compute_prereq_multiplier(event: EventData, squad: Array[AgentData]) -> Di
 ## Returns {"suitability": float, "log": PackedStringArray} — the log
 ## traces both passes: which skills got countered/exploited, then each
 ## category's total value against its requirement.
-func _compute_suitability(event: EventData, squad: Array[AgentData]) -> Dictionary:
+func _compute_suitability(check: MissionCheck, squad: Array[AgentData]) -> Dictionary:
 	if squad.is_empty():
 		return {"suitability": 0.0, "log": PackedStringArray()}
 
@@ -117,7 +117,7 @@ func _compute_suitability(event: EventData, squad: Array[AgentData]) -> Dictiona
 		by_category[key] = []
 	for member: AgentData in squad:
 		for skill: SkillData in EquipmentHandler.get_effective_skills(member):
-			var effective_rank := _apply_modifier_pass(skill, event)
+			var effective_rank := _apply_modifier_pass(skill, check)
 			if effective_rank == 0 and skill.rank > 0:
 				log.append("  [countered] %s's %s (rank %d -> 0)" % [
 					member.agent_name, skill.skill_name, skill.rank])
@@ -127,8 +127,8 @@ func _compute_suitability(event: EventData, squad: Array[AgentData]) -> Dictiona
 			by_category[skill.get_proficiency_key()].append({"skill": skill, "rank": effective_rank})
 
 	var totals := SkillHandler.empty_proficiency_dict()
-	var reqs := event.get_proficiency_requirements()
-	var targets := event.get_target_values()
+	var reqs := check.get_proficiency_requirements()
+	var targets := check.get_target_values()
 	for key: String in SkillData.PROFICIENCY_KEYS:
 		totals[key] = _compute_category_value(by_category[key])
 		var req: int = reqs.get(key, 0)
@@ -136,19 +136,19 @@ func _compute_suitability(event: EventData, squad: Array[AgentData]) -> Dictiona
 			log.append("  %s: total value %.2f (target %.1f, req rank %d)" % [
 				key.capitalize(), totals[key], targets.get(key, 0.0), req])
 
-	var suitability := MissionResolver.compute_value_coverage(totals, targets, event)
+	var suitability := MissionResolver.compute_value_coverage(totals, targets, reqs)
 	log.append("Total-value coverage -> suitability %.2f" % suitability)
 	return {"suitability": suitability, "log": log}
 
 
-func _apply_modifier_pass(skill: SkillData, event: EventData) -> int:
+func _apply_modifier_pass(skill: SkillData, check: MissionCheck) -> int:
 	# is_countered_by() is really just "does any of these tags match the
 	# skill's own tags" — reused here for both directions, since Countered
 	# and Exploited are the same tag-intersection test against two
 	# different tag lists.
-	if SkillHandler.is_countered_by(skill, event.counter_tags):
+	if SkillHandler.is_countered_by(skill, check.counter_tags):
 		return 0
-	if SkillHandler.is_countered_by(skill, event.tags):
+	if SkillHandler.is_countered_by(skill, check.tags):
 		return skill.rank + 1
 	return skill.rank
 

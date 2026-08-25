@@ -6,11 +6,11 @@
 class_name MissionResolver
 extends RefCounted
 
-## Computes how well a team (or solo agent) covers an event's required
-## proficiency ranks. Returns ~1.0 when ranks exactly meet requirements,
-## >1.0 when exceeding, <1.0 when under-qualified.
-static func compute_rank_coverage(agent_ranks: Dictionary, event: EventData) -> float:
-	var reqs := event.get_proficiency_requirements()
+## Computes how well a team (or solo agent) covers a set of required
+## proficiency ranks (a get_proficiency_requirements()-shaped Dictionary,
+## from either EventData or MissionCheck). Returns ~1.0 when ranks exactly
+## meet requirements, >1.0 when exceeding, <1.0 when under-qualified.
+static func compute_rank_coverage(agent_ranks: Dictionary, reqs: Dictionary) -> float:
 	var req_count := 0
 	var coverage_sum := 0.0
 
@@ -73,12 +73,11 @@ static func compute_team_scores(members: Array[AgentData]) -> Dictionary:
 
 
 ## Score-based counterpart to compute_rank_coverage(): compares team score
-## against an event requirement converted to its equivalent score
-## (req * SkillData.RANK_SCALE, the same relationship a single skill's own
+## against a requirement converted to its equivalent score (req *
+## SkillData.RANK_SCALE, the same relationship a single skill's own
 ## rank/score already have). Lets equipment score bonuses move suitability
 ## even when they're too small to cross a rank threshold.
-static func compute_score_coverage(team_scores: Dictionary, event: EventData) -> float:
-	var reqs := event.get_proficiency_requirements()
+static func compute_score_coverage(team_scores: Dictionary, reqs: Dictionary) -> float:
 	var req_count := 0
 	var coverage_sum := 0.0
 
@@ -110,20 +109,23 @@ const SCORE_WEIGHT: float = 0.2
 ## *why* a suitability number came out the way it did.
 ## compute_team_suitability() is a thin wrapper around this that just
 ## discards the log, for callers (e.g. the deploy screen's match%
-## preview) that only want the number.
-static func compute_team_suitability_explained(event: EventData, members: Array[AgentData]) -> Dictionary:
+## preview) that only want the number. reqs is a
+## get_proficiency_requirements()-shaped Dictionary (EventData or
+## MissionCheck); active_tags is typically the check's own tags, omitted
+## for callers (like the deploy preview) with no specific check in mind.
+static func compute_team_suitability_explained(reqs: Dictionary, members: Array[AgentData],
+		active_tags: PackedStringArray = PackedStringArray()) -> Dictionary:
 	if members.is_empty():
 		return {"suitability": 0.0, "log": PackedStringArray()}
 
-	var team_ranks := compute_team_ranks(members, event.tags)
+	var team_ranks := compute_team_ranks(members, active_tags)
 	var team_scores := compute_team_scores(members)
-	var rank_coverage := compute_rank_coverage(team_ranks, event)
-	var score_coverage := compute_score_coverage(team_scores, event)
+	var rank_coverage := compute_rank_coverage(team_ranks, reqs)
+	var score_coverage := compute_score_coverage(team_scores, reqs)
 	var synergy := _compute_synergy_bonus(members)
 	var suitability := lerpf(rank_coverage, score_coverage, SCORE_WEIGHT) + synergy
 
 	var log: PackedStringArray = []
-	var reqs := event.get_proficiency_requirements()
 	for key: String in SkillData.PROFICIENCY_KEYS:
 		var req: int = reqs.get(key, 0)
 		if req <= 0:
@@ -137,29 +139,59 @@ static func compute_team_suitability_explained(event: EventData, members: Array[
 	return {"suitability": suitability, "log": log}
 
 
-static func compute_team_suitability(event: EventData, members: Array[AgentData]) -> float:
+static func compute_team_suitability(reqs: Dictionary, members: Array[AgentData],
+		active_tags: PackedStringArray = PackedStringArray()) -> float:
 	if members.is_empty():
 		return 0.0
-	return compute_team_suitability_explained(event, members)["suitability"]
+	return compute_team_suitability_explained(reqs, members, active_tags)["suitability"]
 
 
 static func _compute_synergy_bonus(_members: Array[AgentData]) -> float:
 	return 0.0
 
 
+## Average team suitability across every phase of a multi-stage mission —
+## the deploy screen's match% preview. Per phase, averages suitability
+## against each of the phase's own checks first (a ChoicePhase's checks
+## all "count" since only one will actually run and which one isn't known
+## ahead of time), then averages those per-phase numbers across all
+## phases. A phase with no checks (misconfigured) is skipped rather than
+## dragging the average to 0. Returns 0.0 if there's nothing to compute
+## (no members, or no phase has any checks) — same "no data" convention
+## as compute_team_suitability().
+static func compute_mission_suitability(phases: Array[MissionPhase], members: Array[AgentData]) -> float:
+	if members.is_empty():
+		return 0.0
+
+	var phase_total := 0.0
+	var phase_count := 0
+	for phase: MissionPhase in phases:
+		var checks := phase.get_checks()
+		if checks.is_empty():
+			continue
+		var check_total := 0.0
+		for check: MissionCheck in checks:
+			check_total += compute_team_suitability(check.get_proficiency_requirements(), members, check.tags)
+		phase_total += check_total / float(checks.size())
+		phase_count += 1
+
+	if phase_count == 0:
+		return 0.0
+	return phase_total / float(phase_count)
+
+
 ## Coverage using arbitrary continuous per-category values against
 ## explicit per-category targets — for strategies whose aggregation isn't
 ## the standard RANK_THRESHOLDS tier walk and whose target isn't
 ## necessarily req_* itself (e.g. TagBreadthResolutionStrategy's totaled
-## tag-weighted values against EventData.get_target_values()). A category
-## only counts if the event still requires it (req_* > 0 — that field
-## stays the single source of truth for "is this category in play at
-## all") and has a resolvable (>0) target. Same shape/clamping as
+## tag-weighted values against MissionCheck.get_target_values()). A
+## category only counts if reqs still requires it (req_* > 0 — that stays
+## the single source of truth for "is this category in play at all") and
+## has a resolvable (>0) target. Same shape/clamping as
 ## compute_rank_coverage, just float-safe (compute_rank_coverage
 ## truncates its dict's values to int, which would silently lose
 ## precision here).
-static func compute_value_coverage(values: Dictionary, targets: Dictionary, event: EventData) -> float:
-	var reqs := event.get_proficiency_requirements()
+static func compute_value_coverage(values: Dictionary, targets: Dictionary, reqs: Dictionary) -> float:
 	var req_count := 0
 	var coverage_sum := 0.0
 

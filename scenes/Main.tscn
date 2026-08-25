@@ -18,7 +18,6 @@
 [ext_resource type="Script" uid="uid://cmn5k3mn1d2ww" path="res://scripts/managers/team_manager.gd" id="12_teammanager"]
 [ext_resource type="Theme" uid="uid://bvs1oeej2kgvg" path="res://theme/ui_theme.tres" id="13_uitheme"]
 [ext_resource type="Resource" uid="uid://crtowpara5a43" path="res://data/event_templates/magical_surge.tres" id="13_xa025"]
-[ext_resource type="Script" uid="uid://dx4uopx6pjasx" path="res://scripts/managers/resolution/tag_breadth_resolution_strategy.gd" id="14_ma7h6"]
 [ext_resource type="Script" uid="uid://dglngvv1scups" path="res://scripts/ui/top_bar.gd" id="14_topbar"]
 [ext_resource type="Script" uid="uid://d1a4kuru82rac" path="res://scripts/ui/root_ui.gd" id="15_rootui"]
 [ext_resource type="Script" uid="uid://0e1m87kygusj" path="res://scripts/ui/detail_sidebar.gd" id="16_detailpanel"]
@@ -28,9 +27,8 @@
 [ext_resource type="Script" uid="uid://bsq774q1vd22" path="res://scripts/travel_path_layer.gd" id="20_travelpathlayer"]
 [ext_resource type="Script" uid="uid://d1ppro81a3mt0" path="res://scripts/ui/equipment_tab.gd" id="21_equipmenttab"]
 [ext_resource type="Script" uid="uid://bj538xi1vtr46" path="res://scripts/managers/base_manager.gd" id="22_basemanager"]
-
-[sub_resource type="Resource" id="Resource_v6wrm"]
-script = ExtResource("14_ma7h6")
+[ext_resource type="Script" uid="uid://drg2k66cmj2ix" path="res://scripts/ui/mission_choice_dialog.gd" id="23_missionchoicedialog"]
+[ext_resource type="Script" uid="uid://ccpg4t1tynq76" path="res://scripts/managers/event_log.gd" id="24_eventlog"]
 
 [sub_resource type="Environment" id="Environment_1"]
 background_mode = 2
@@ -95,8 +93,11 @@ script = ExtResource("12_teammanager")
 [node name="EventManager" type="Node" parent="." unique_id=388966121]
 unique_name_in_owner = true
 script = ExtResource("10_eventmanager")
-resolution_strategy = SubResource("Resource_v6wrm")
 spawn_templates = Array[ExtResource("12_2ofn6")]([ExtResource("13_xa025")])
+
+[node name="EventLog" type="Node" parent="." unique_id=1161776455]
+unique_name_in_owner = true
+script = ExtResource("24_eventlog")
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=1588015448]
 environment = SubResource("Environment_1")
@@ -311,6 +312,19 @@ offset_bottom = 80.0
 focus_mode = 0
 text = "▶"
 
+[node name="EventLogToggle" type="Button" parent="UI/Root/LeftToggle" unique_id=1973512331]
+unique_name_in_owner = true
+layout_mode = 0
+offset_left = -310.0
+offset_top = 6.0
+offset_right = -289.0
+offset_bottom = 34.0
+offset_transform_enabled = true
+offset_transform_position = Vector2(310, 30)
+tooltip_text = "Event Log"
+focus_mode = 0
+text = "☰"
+
 [node name="RightSidebar" type="PanelContainer" parent="UI/Root" unique_id=1659837075]
 layout_mode = 1
 anchors_preset = 11
@@ -386,5 +400,14 @@ offset_bottom = 80.0
 grow_horizontal = 0
 focus_mode = 0
 text = "▶"
+
+[node name="MissionChoiceDialog" type="Control" parent="UI/Root" unique_id=664288587]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("23_missionchoicedialog")
 
 [node name="Game" type="Node" parent="." unique_id=592092588]
