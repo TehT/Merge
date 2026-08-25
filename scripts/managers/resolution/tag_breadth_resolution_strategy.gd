@@ -62,9 +62,11 @@ extends MissionResolutionStrategy
 
 ## Chance multiplier applied once per required category whose team rank
 ## doesn't clear its req_* hard prerequisite (compounds: two missed
-## categories apply this twice). Tunable in the Inspector — 0.5 means one
-## missed prerequisite halves the chance ("50% harder").
-@export_range(0.0, 1.0) var missing_prereq_penalty: float = 0.5
+## categories apply this twice). Tunable in the Inspector — 0.75 means
+## one missed prerequisite cuts the chance by a quarter. 0.5 (a straight
+## halving) played too harsh in practice — a 95% shot dropping to ~40-48%
+## off a single missed prerequisite felt like too big a swing.
+@export_range(0.0, 1.0) var missing_prereq_penalty: float = 0.75
 
 
 func resolve(event: EventData, squad: Array[AgentData]) -> MissionResolutionResult:
