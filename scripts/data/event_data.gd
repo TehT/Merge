@@ -189,6 +189,17 @@ func has_tag(tag: String) -> bool:
 @export var decision_option_funding: PackedInt32Array = []
 @export var decision_option_consequence_keys: PackedStringArray = []
 
+## ── Multi-Stage Missions ────────────────────────────────────────────────────
+## An empty phases array (the default) means this event resolves the old
+## way — a single resolution_strategy.resolve(event, squad) call. A
+## non-empty array hands resolution off to MissionPhaseRunner instead,
+## which runs each phase in order and merges their results; the top-level
+## req_*/target_*/tags fields above are then unused (each phase's own
+## MissionCheck carries its own).
+
+@export_group("Multi-Stage Missions")
+@export var phases: Array[MissionPhase] = []
+
 ## ── Runtime State ───────────────────────────────────────────────────────────
 
 var status: Status = Status.ACTIVE

@@ -176,7 +176,8 @@ func _on_team_arrived(team_id: String, event_id: String) -> void:
 		if a != null and a.status == AgentData.Status.DEPLOYED:
 			members.append(a)
 
-	var result := resolution_strategy.resolve(event, members)
+	var result := MissionPhaseRunner.resolve(event.phases, members) if not event.phases.is_empty() \
+			else resolution_strategy.resolve(event, members)
 	_backfill_agent_results(members, result)
 	_apply_resolution(event, result)
 	Game.team_manager.grant_mission_cohesion(team_id)
@@ -202,7 +203,8 @@ func resolve_event_solo(event_id: String, agent_id: String) -> MissionResolution
 	if agent == null or not agent.is_available():
 		return null
 
-	var result := resolution_strategy.resolve(event, [agent])
+	var result := MissionPhaseRunner.resolve(event.phases, [agent]) if not event.phases.is_empty() \
+			else resolution_strategy.resolve(event, [agent])
 	_backfill_agent_results([agent], result)
 	_apply_resolution(event, result)
 	for aid: String in result.agent_results:
