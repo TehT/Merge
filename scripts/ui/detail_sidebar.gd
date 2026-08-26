@@ -22,6 +22,7 @@ var _view: _View = _View.EMPTY
 var _view_agent: AgentData
 var _view_team: TeamData
 var _view_event: EventData
+var _view_base: BaseData
 var _refresh_pending := false
 
 func _ready() -> void:
@@ -60,7 +61,7 @@ func _refresh_view() -> void:
 			if _view_team:
 				show_team(_view_team)
 		_View.HQ:
-			show_hq()
+			show_hq(_view_base)
 
 
 func show_agent(agent: AgentData) -> void:
@@ -90,12 +91,16 @@ func show_event(ev: EventData) -> void:
 	view.populate(ev)
 
 
-func show_hq() -> void:
+## base defaults to null (BaseManager.get_primary_base()) — the HQ map
+## marker calls this with no argument; BasesTab passes the specific base
+## clicked, ready for whenever there's more than one to distinguish.
+func show_hq(base: BaseData = null) -> void:
 	_view = _View.HQ
+	_view_base = base
 	_clear()
 	var view: VBoxContainer = DetailViewHQ.new()
 	add_child(view)
-	view.populate()
+	view.populate(base)
 
 
 ## Mission resolution now happens whenever a traveling team arrives (see
@@ -128,6 +133,7 @@ func show_empty() -> void:
 	_view_agent = null
 	_view_team = null
 	_view_event = null
+	_view_base = null
 	_clear()
 	var hint := Label.new()
 	hint.text = "Select an agent or event to view details."

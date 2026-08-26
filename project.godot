@@ -21,7 +21,7 @@ config/icon="res://icon.svg"
 
 [autoload]
 
-Game="*uid://bnk82tgsl5twh"
+Game="*uid://biuc1elqjutwh"
 
 [display]
 

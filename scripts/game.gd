@@ -8,8 +8,10 @@ var base_manager: BaseManager
 var team_manager: TeamManager
 var event_manager: EventManager
 var event_log: EventLog
+var hiring_manager: HiringManager
 var geo_data: GeoData
 
 var detail_sidebar: DetailSidebar
 var slideout_panel: SlideoutPanel
+var right_slideout_panel: RightSlideoutPanel
 var mission_choice_dialog: MissionChoiceDialog

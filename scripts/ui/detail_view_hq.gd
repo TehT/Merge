@@ -5,8 +5,8 @@ extends "res://scripts/ui/detail_view_base.gd"
 ## base (BaseData.local_equipment) — the right sidebar's Equipment tab
 ## shows the full pool including org-wide global_equipment.
 
-func populate() -> void:
-	var hq := Game.base_manager.get_primary_base()
+func populate(base: BaseData = null) -> void:
+	var hq := base if base != null else Game.base_manager.get_primary_base()
 	_add_title(hq.base_name)
 	_add_subtitle("Home base", Color(0.55, 0.55, 0.6, 1.0))
 

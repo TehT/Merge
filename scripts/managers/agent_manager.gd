@@ -39,6 +39,14 @@ func _create_starting_roster() -> Array[AgentData]:
 			roster_out.append(AgentGenerator.generate_random_specialist(recruit_name))
 	return roster_out
 
+## Adds a hired recruit (from HiringManager) directly onto the roster —
+## separate from _create_starting_roster() since this happens mid-game,
+## one agent at a time, in response to a player action rather than at
+## startup.
+func add_recruit(agent: AgentData) -> void:
+	roster.append(agent)
+	roster_changed.emit()
+
 func get_available_agents() -> Array[AgentData]:
 	return roster.filter(func(a: AgentData): return a.is_available())
 

@@ -11,7 +11,7 @@ signal team_selected(team: TeamData)
 var _expanded: Dictionary = {}
 var _selected_agent_id: String = ""
 var _next_team_number: int = 2
-var _new_squad_btn: Button
+var _bottom_row: HBoxContainer
 
 
 func _ready() -> void:
@@ -24,8 +24,8 @@ func _ready() -> void:
 	Game.team_manager.training_completed.connect(_on_team_changed)
 	Game.team_manager.membership_changed.connect(_on_membership_changed)
 	Game.team_manager.team_renamed.connect(_on_team_changed)
-	_new_squad_btn = _make_new_squad_button()
-	get_parent().get_parent().add_child.call_deferred(_new_squad_btn)
+	_bottom_row = _make_bottom_row()
+	get_parent().get_parent().add_child.call_deferred(_bottom_row)
 	_refresh()
 
 
@@ -79,15 +79,28 @@ func _refresh() -> void:
 	add_child(_make_group("unassigned", "Unassigned", unassigned))
 
 
-func _make_new_squad_button() -> Control:
+## Pinned outside the scrollable list, at the bottom of the Squads tab:
+## "+ New Squad" plus "Hire", side by side — Hire used to be its own
+## right-sidebar icon (opening RightSlideoutPanel directly), moved here
+## since it's squad-roster-adjacent and the icon column was getting
+## crowded with things that aren't really tab switches.
+func _make_bottom_row() -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 4)
+	row.add_child(_make_flat_button("+ New Squad", _on_new_squad_pressed))
+	row.add_child(_make_flat_button("Hire", func() -> void: Game.right_slideout_panel.show_hire()))
+	return row
+
+
+func _make_flat_button(text: String, on_pressed: Callable) -> Button:
 	var btn := Button.new()
-	btn.text = "+ New Squad"
+	btn.text = text
 	btn.flat = true
 	btn.focus_mode = Control.FOCUS_NONE
 	btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	btn.add_theme_color_override("font_color", Color(0.45, 0.45, 0.5, 0.8))
 	btn.add_theme_font_size_override("font_size", 12)
-	btn.pressed.connect(_on_new_squad_pressed)
+	btn.pressed.connect(on_pressed)
 	return btn
 
 

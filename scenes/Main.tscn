@@ -29,6 +29,9 @@
 [ext_resource type="Script" uid="uid://bj538xi1vtr46" path="res://scripts/managers/base_manager.gd" id="22_basemanager"]
 [ext_resource type="Script" uid="uid://drg2k66cmj2ix" path="res://scripts/ui/mission_choice_dialog.gd" id="23_missionchoicedialog"]
 [ext_resource type="Script" uid="uid://ccpg4t1tynq76" path="res://scripts/managers/event_log.gd" id="24_eventlog"]
+[ext_resource type="Script" path="res://scripts/managers/hiring_manager.gd" id="25_hiringmanager"]
+[ext_resource type="Script" path="res://scripts/ui/right_slideout_panel.gd" id="27_rightslideout"]
+[ext_resource type="Script" path="res://scripts/ui/bases_tab.gd" id="28_basestab"]
 
 [sub_resource type="Environment" id="Environment_1"]
 background_mode = 2
@@ -80,6 +83,10 @@ script = ExtResource("8_concealmentstate")
 [node name="AgentManager" type="Node" parent="." unique_id=1178527809]
 unique_name_in_owner = true
 script = ExtResource("9_agentmanager")
+
+[node name="HiringManager" type="Node" parent="."]
+unique_name_in_owner = true
+script = ExtResource("25_hiringmanager")
 
 [node name="BaseManager" type="Node" parent="." unique_id=-1483389956]
 unique_name_in_owner = true
@@ -312,12 +319,13 @@ offset_bottom = 80.0
 focus_mode = 0
 text = "▶"
 
-[node name="EventLogToggle" type="Button" parent="UI/Root" unique_id=1973512331]
+[node name="EventLogToggle" type="Button" parent="UI/Root/LeftToggle" unique_id=1973512331]
 unique_name_in_owner = true
 layout_mode = 1
-offset_top = 84.0
+anchors_preset = 0
+offset_top = 36.0
 offset_right = 24.0
-offset_bottom = 116.0
+offset_bottom = 68.0
 tooltip_text = "Event Log"
 focus_mode = 0
 text = "☰"
@@ -334,8 +342,10 @@ grow_horizontal = 0
 grow_vertical = 2
 
 [node name="Tabs" type="TabContainer" parent="UI/Root/RightSidebar" unique_id=1977334389]
+unique_name_in_owner = true
 layout_mode = 2
 current_tab = 0
+tabs_visible = false
 
 [node name="Squads" type="VBoxContainer" parent="UI/Root/RightSidebar/Tabs" unique_id=1023984741]
 layout_mode = 2
@@ -385,6 +395,18 @@ layout_mode = 2
 size_flags_horizontal = 3
 script = ExtResource("21_equipmenttab")
 
+[node name="Bases" type="ScrollContainer" parent="UI/Root/RightSidebar/Tabs"]
+visible = false
+layout_mode = 2
+horizontal_scroll_mode = 0
+metadata/_tab_index = 4
+
+[node name="BasesList" type="VBoxContainer" parent="UI/Root/RightSidebar/Tabs/Bases"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+script = ExtResource("28_basestab")
+
 [node name="RightToggle" type="Button" parent="UI/Root" unique_id=1985642592]
 layout_mode = 1
 anchors_preset = 1
@@ -397,6 +419,68 @@ offset_bottom = 80.0
 grow_horizontal = 0
 focus_mode = 0
 text = "▶"
+
+[node name="RightTabIcons" type="VBoxContainer" parent="UI/Root/RightToggle"]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 0
+offset_top = 36.0
+offset_right = 24.0
+offset_bottom = 196.0
+theme_override_constants/separation = 4
+
+[node name="SquadsIcon" type="Button" parent="UI/Root/RightToggle/RightTabIcons"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(24, 28)
+focus_mode = 0
+text = "⚑"
+tooltip_text = "Squads"
+
+[node name="EventsIcon" type="Button" parent="UI/Root/RightToggle/RightTabIcons"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(24, 28)
+focus_mode = 0
+text = "⚠"
+tooltip_text = "Events"
+
+[node name="ResearchIcon" type="Button" parent="UI/Root/RightToggle/RightTabIcons"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(24, 28)
+focus_mode = 0
+text = "⚗"
+tooltip_text = "Research"
+
+[node name="EquipmentIcon" type="Button" parent="UI/Root/RightToggle/RightTabIcons"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(24, 28)
+focus_mode = 0
+text = "⚙"
+tooltip_text = "Equipment"
+
+[node name="BasesIcon" type="Button" parent="UI/Root/RightToggle/RightTabIcons"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(24, 28)
+focus_mode = 0
+text = "⌂"
+tooltip_text = "Bases"
+
+[node name="RightSlideout" type="PanelContainer" parent="UI/Root"]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 11
+anchor_left = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = 56.0
+offset_bottom = -8.0
+grow_horizontal = 0
+grow_vertical = 2
+script = ExtResource("27_rightslideout")
 
 [node name="MissionChoiceDialog" type="Control" parent="UI/Root" unique_id=664288587]
 layout_mode = 1
