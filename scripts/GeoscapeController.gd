@@ -10,6 +10,20 @@ var camera: Camera3D
 @export var drag_sensitivity: float = 0.008
 @export var auto_rotate_speed: float = 0.0
 @export var momentum_damping: float = 4.0
+## How quickly the release-momentum estimate adapts to the mouse's actual
+## recent speed (an exponential moving average of rad/sec, not the raw
+## per-event pixel delta) — higher tracks a fast final flick more
+## tightly; lower smooths out a single noisy/oddly-timed sample so a
+## slow, tiny drag can't seed a big spin just because its last motion
+## event happened to report an outsized delta relative to its timing.
+@export var momentum_smoothing: float = 15.0
+## How long the mouse can sit idle mid-drag (still held, but no new
+## motion event) before the smoothed rate estimate clears. Without this,
+## dragging fast and then pausing before releasing hands off stale,
+## no-longer-true momentum from before the pause -- the EMA only updates
+## on motion events, so it has no way to know the drag has stopped if
+## nothing ever tells it.
+@export var momentum_idle_reset: float = 0.1
 
 @export_group("Zoom")
 @export var zoom_speed: float = 0.5
@@ -72,7 +86,7 @@ var day_of_year: float = 0.0:
 @export var geo: GeoData
 
 signal globe_clicked(screen_position: Vector2)
-@export var click_max_drag_px: float = 6.0
+@export var click_max_drag_px: float = 32
 
 # --- Private state ---
 var _material: ShaderMaterial
@@ -93,6 +107,9 @@ var _last_mouse_pos := Vector2.ZERO
 var _drag_distance_px := 0.0
 var _yaw_velocity := 0.0
 var _pitch_velocity := 0.0
+var _yaw_rate := 0.0   # smoothed rad/sec while dragging -- see momentum_smoothing
+var _pitch_rate := 0.0
+var _last_motion_usec: int = 0
 var _yaw_accum := 0.0
 var _pitch_accum := 0.0
 var _globe_basis := Basis.IDENTITY
@@ -154,6 +171,7 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
+	_process_drag_idle()
 	_process_rotation(delta)
 	_process_camera(delta)
 	_process_sun(delta)
@@ -165,10 +183,23 @@ func _process(delta: float) -> void:
 # Per-frame subsystems
 # =============================================================================
 
+## Clears the smoothed drag-rate estimate once the mouse has sat idle
+## (still held, no new motion event) past momentum_idle_reset -- a real,
+## still-in-progress drag never goes that long between motion events, so
+## this only ever fires for an actual pause, not normal event spacing.
+func _process_drag_idle() -> void:
+	if not _dragging or (_yaw_rate == 0.0 and _pitch_rate == 0.0):
+		return
+	var idle_sec := (Time.get_ticks_usec() - _last_motion_usec) / 1_000_000.0
+	if idle_sec > momentum_idle_reset:
+		_yaw_rate = 0.0
+		_pitch_rate = 0.0
+
+
 func _process_rotation(delta: float) -> void:
 	if not _dragging and not flatten:
 		if absf(_yaw_velocity) > 0.0001 or absf(_pitch_velocity) > 0.0001:
-			_apply_rotation(_yaw_velocity, _pitch_velocity)
+			_apply_rotation(_yaw_velocity * delta, _pitch_velocity * delta)
 			var damp :Variant = clamp(1.0 - momentum_damping * delta, 0.0, 1.0)
 			_yaw_velocity *= damp
 			_pitch_velocity *= damp
@@ -275,8 +306,26 @@ func _unhandled_input(event: InputEvent) -> void:
 					_yaw_velocity = 0.0
 					_pitch_velocity = 0.0
 					_drag_distance_px = 0.0
-				elif _drag_distance_px <= click_max_drag_px:
-					globe_clicked.emit(mb.position)
+					_yaw_rate = 0.0
+					_pitch_rate = 0.0
+					_last_motion_usec = Time.get_ticks_usec()
+				else:
+					if _drag_distance_px <= click_max_drag_px:
+						# Barely-moved-at-all release (a click, or jitter
+						# too small to count as a real drag) -- no spin at
+						# all, not even a small one. Without this gate, a
+						# single oddly-timed micro-motion sample during an
+						# otherwise-stationary click could still seed a
+						# nonzero (if small) _yaw_rate/_pitch_rate.
+						_yaw_velocity = 0.0
+						_pitch_velocity = 0.0
+						globe_clicked.emit(mb.position)
+					else:
+						# Seed release momentum from the smoothed drag
+						# rate, not whatever the single last motion
+						# event's raw delta was -- see momentum_smoothing.
+						_yaw_velocity = _yaw_rate
+						_pitch_velocity = _pitch_rate
 			MOUSE_BUTTON_WHEEL_UP:
 				var new_dist : Variant= clamp(_target_distance - zoom_speed, min_distance, max_distance)
 				if flatten and new_dist < _target_distance:
@@ -296,9 +345,20 @@ func _unhandled_input(event: InputEvent) -> void:
 		if flatten:
 			_pan_drag(delta)
 		else:
-			_yaw_velocity = -delta.x * drag_sensitivity
-			_pitch_velocity = -delta.y * drag_sensitivity
-			_apply_rotation(_yaw_velocity, _pitch_velocity)
+			var yaw_amount := -delta.x * drag_sensitivity
+			var pitch_amount := -delta.y * drag_sensitivity
+			_apply_rotation(yaw_amount, pitch_amount)
+
+			# Smoothed rad/sec estimate, kept separate from the immediate
+			# per-event rotation above -- dragging itself still tracks the
+			# cursor exactly; this EMA only feeds the release-momentum
+			# seed, so a single oddly-timed sample can't dominate it.
+			var now := Time.get_ticks_usec()
+			var dt := maxf((now - _last_motion_usec) / 1_000_000.0, 0.0001)
+			_last_motion_usec = now
+			var alpha := clampf(momentum_smoothing * dt, 0.0, 1.0)
+			_yaw_rate = lerpf(_yaw_rate, yaw_amount / dt, alpha)
+			_pitch_rate = lerpf(_pitch_rate, pitch_amount / dt, alpha)
 
 
 # =============================================================================
