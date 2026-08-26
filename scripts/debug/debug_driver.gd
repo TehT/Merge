@@ -66,7 +66,14 @@ func _deploy_first_team_to_most_urgent() -> void:
 	events.sort_custom(func(a: EventData, b: EventData): return a.urgency > b.urgency)
 	var event: EventData = events[0]
 
-	var plan: Dictionary = Game.event_manager.deploy_team(event.id, team.id)
+	var routes := TravelRouter.find_routes(team.location, team.location_name,
+			event.geo_coordinates, event.location_city, team.member_ids.size(),
+			VehicleData.Role.TACTICAL, Game.base_manager.bases, team.current_vehicle)
+	if routes.is_empty():
+		print("[Debug] deploy failed (no route reaches this event)")
+		return
+
+	var plan: Dictionary = Game.event_manager.deploy_team(event.id, team.id, routes[0])
 	if plan.is_empty():
 		print("[Debug] deploy failed (team or event not found)")
 		return

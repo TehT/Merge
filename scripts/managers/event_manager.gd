@@ -123,13 +123,14 @@ func _spawn_escalation(parent: EventData) -> void:
 
 ## Starts a team traveling to an event instead of resolving it immediately.
 ## Marks the event DEPLOYED (which pauses its days_remaining countdown —
-## see _tick_active_events) and hands off to TeamManager.begin_travel() for
-## the actual travel-time math. The mission resolves later, when
-## TeamManager fires team_arrived. Returns the travel plan dict from
-## begin_travel(), or {} if the event/team don't exist. vehicle_override
-## forwards straight to begin_travel() (the deploy UI's dropdown pick);
-## omit it to auto-select the best fleet vehicle.
-func deploy_team(event_id: String, team_id: String, vehicle_override: VehicleData = null) -> Dictionary:
+## see _tick_active_events) and hands off to TeamManager.begin_travel_route()
+## for the actual travel-time math. The mission resolves later, when
+## TeamManager fires team_arrived (once every leg of `route` has been
+## flown). Returns the travel plan dict from begin_travel_route(), or {}
+## if the event/team don't exist. `route` is the player's chosen route
+## from the deploy UI's route picker (TravelRouter.find_routes(...,
+## final_role=TACTICAL, ...)) — possibly multi-leg via relay bases.
+func deploy_team(event_id: String, team_id: String, route: Array) -> Dictionary:
 	var event := get_event_by_id(event_id)
 	if event == null:
 		return {}
@@ -138,8 +139,7 @@ func deploy_team(event_id: String, team_id: String, vehicle_override: VehicleDat
 		push_warning("[EventManager] no such team: %s" % team_id)
 		return {}
 
-	var plan: Dictionary = Game.team_manager.begin_travel(
-			team_id, event.geo_coordinates, event.location_city, event_id, vehicle_override)
+	var plan: Dictionary = Game.team_manager.begin_travel_route(team_id, route, event_id)
 	if plan.is_empty():
 		return {}
 

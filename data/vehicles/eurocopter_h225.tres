@@ -5,7 +5,6 @@
 [resource]
 script = ExtResource("1_eurocopter")
 vehicle_name = "Airbus H225-A"
-role = 0
 description = "The Agency's primary transport for field teams. Built on the Airbus H225/EC725 airframe this agency variant heavy lifter is both faster and with longer years than their civilian or even military counterparts.
 "
 speed_kmh = 320.0

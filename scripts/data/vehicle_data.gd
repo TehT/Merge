@@ -7,15 +7,16 @@
 ## (instant, but range-limited and cooldown-gated).
 ##
 ## max_range_km applies to both modes: it's "how far this transport can
-## reach in one hop," full stop — a CONTINUOUS vehicle's range is its
+## reach in one hop," full stop — a single vehicle's range is its
 ## operational range before it'd need a leg no game system models yet
-## (refueling stops, forward bases), so distant events are simply out of
-## reach until a longer-ranged transport comes online, not just slow to
-## get to.
+## (refueling stops mid-flight). A destination beyond any one vehicle's
+## range isn't necessarily unreachable, though: TravelRouter can chain a
+## TRANSPORT hop to a closer base with a TACTICAL vehicle's final leg
+## from there (or several TRANSPORT hops relaying toward a TRANSPORT
+## destination) — see travel_router.gd.
 ##
 ## TeamManager owns the fleet (Array[VehicleData]) and picks the best fit
-## per deployment (see get_best_vehicle) — vehicles aren't tied to one
-## team.
+## per leg — vehicles aren't tied to one team.
 class_name VehicleData
 extends Resource
 

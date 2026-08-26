@@ -73,59 +73,95 @@ func _process(_delta: float) -> void:
 		elif team.is_on_mission and now >= team.mission_ready_day:
 			_complete_mission_work(team)
 
-## Picks the best vehicle for a trip of this distance/team size, pooled
-## across every base (see BaseManager.get_all_vehicles — a stand-in until
-## teams track a home base to search just that base's fleet): fastest
-## among those that can reach it and carry everyone, tie-broken by lowest
-## operation cost. Only considers `role` vehicles (TACTICAL by default) —
-## a TRANSPORT vehicle (base-to-base logistics only) never gets picked for
-## mission deployment, even if it happens to be faster or longer-ranged.
-## Returns null if nothing available qualifies.
-func get_best_vehicle(distance_km: float, team_size: int,
-		role: VehicleData.Role = VehicleData.Role.TACTICAL) -> VehicleData:
-	var best: VehicleData = null
-	var best_hours := INF
-	for v: VehicleData in Game.base_manager.get_all_vehicles():
-		if v.role != role:
-			continue
-		if not v.can_reach(distance_km) or not v.can_carry(team_size):
-			continue
-		var hours := v.compute_travel_hours(distance_km)
-		if best == null or hours < best_hours or (hours == best_hours and v.operation_cost < best.operation_cost):
-			best = v
-			best_hours = hours
-	return best
-
-## Starts a team traveling toward an event's location. Returns a plan
-## dict ({distance_km, travel_hours, arrival_time, vehicle_name}) for the
-## caller to show the player, or {} if the team doesn't exist or no fleet
-## vehicle can reach the destination / carry the whole team. Marks members
-## DEPLOYED — actual mission resolution happens later, on arrival
-## (EventManager listens for team_arrived).
-##
-## vehicle_override lets a caller (the deploy UI's dropdown) pick a
-## specific fleet vehicle instead of the auto-selected best fit — still
-## validated here (range + capacity + TACTICAL role) rather than trusted
-## blindly, so TeamManager stays the single source of truth for what's
-## actually possible. A TRANSPORT vehicle is rejected even as an explicit
-## override — it's base-to-base logistics only, never a mission runner.
-func begin_travel(team_id: String, destination: Vector2, destination_name: String, event_id: String,
-		vehicle_override: VehicleData = null) -> Dictionary:
-	var team := get_team(team_id)
-	if team == null:
-		return {}
-
-	var distance := GeoData.haversine_km(team.location.y, team.location.x, destination.y, destination.x)
-	var vehicle := vehicle_override if vehicle_override != null else get_best_vehicle(distance, team.member_ids.size())
-	if vehicle == null or vehicle.role != VehicleData.Role.TACTICAL \
-			or not vehicle.can_reach(distance) or not vehicle.can_carry(team.member_ids.size()):
-		push_warning("[TeamManager] no usable vehicle to reach %s (%.0f km) with a team of %d" % [
-			destination_name, distance, team.member_ids.size(),
-		])
-		return {}
-
-	var hours := vehicle.compute_travel_hours(distance)
+## Mechanics shared by every leg of a journey, whether it's the first leg
+## of a fresh trip or a subsequent one continued from _complete_travel:
+## picks up leg.vehicle (see _pickup_vehicle), marks the team traveling
+## toward leg.to, marks available members DEPLOYED (a no-op for members
+## already DEPLOYED from an earlier leg — AgentManager.set_status() guards
+## on old==new), emits team_departed. Does NOT touch the terminal-intent
+## flags (travel_event_id/travel_is_relocation/travel_is_return/
+## travel_return_to) — those are set once, by whichever top-level function
+## starts the whole journey, and stay untouched across every leg until
+## travel_queued_legs empties out.
+func _start_leg(team: TeamData, leg: Dictionary) -> void:
+	var vehicle: VehicleData = leg["vehicle"]
+	_pickup_vehicle(team, vehicle)
 	var now: float = Game.game_clock.get_current_time_days()
+
+	team.is_traveling = true
+	team.travel_destination = leg["to"]
+	team.travel_destination_name = leg["to_name"]
+	team.travel_departure_day = now
+	team.travel_arrival_day = now + leg["travel_hours"] / 24.0
+	team.travel_vehicle_name = vehicle.vehicle_name
+
+	for agent_id in team.member_ids:
+		var a: AgentData = Game.agent_manager.get_agent_by_id(agent_id)
+		if a != null and a.is_available():
+			Game.agent_manager.set_status(agent_id, AgentData.Status.DEPLOYED)
+
+	team_departed.emit(team.id)
+	print("[TeamManager] %s departed for %s via %s (%.0f km, %s)" % [
+		team.team_name, leg["to_name"], vehicle.vehicle_name, leg["distance_km"],
+		VehicleData.format_duration(leg["travel_hours"]),
+	])
+
+## Removes `vehicle` from wherever it currently sits (a base's fleet) and
+## attaches it to `team` — a vehicle in transit belongs exclusively to
+## whichever team is using it, so no other team's route search can find it
+## (TravelRouter only ever looks at BaseData.vehicles). No-op if the team
+## already holds this exact vehicle (e.g. continuing straight on from a
+## mission site with nowhere to have dropped it off).
+func _pickup_vehicle(team: TeamData, vehicle: VehicleData) -> void:
+	if team.current_vehicle == vehicle:
+		return
+	for base: BaseData in Game.base_manager.bases:
+		if base.vehicles.has(vehicle):
+			base.vehicles.erase(vehicle)
+			break
+	team.current_vehicle = vehicle
+
+## Parks the team's current vehicle at `base` (back in its fleet, so
+## another team's route search can find it again) and clears
+## team.current_vehicle. No-op if the team isn't holding one. Called on
+## every arrival at a base — including a relay stop, where _start_leg's
+## next _pickup_vehicle() call may immediately re-attach the very same
+## vehicle if that's genuinely the best pick again, which is equivalent to
+## never letting go of it.
+func _release_vehicle(team: TeamData, base: BaseData) -> void:
+	if team.current_vehicle == null:
+		return
+	base.vehicles.append(team.current_vehicle)
+	team.current_vehicle = null
+
+## Sums a route's legs into the plan dict shape callers/UI expect
+## ({distance_km, travel_hours, arrival_time, vehicle_name}), plus the
+## full leg list (for a per-leg breakdown — see detail_view_result.gd).
+## arrival_time/vehicle_name describe the *first* leg's departure moment
+## and vehicle isn't meaningful for a multi-leg route the same way it is
+## for a 1-leg one, but distance_km/travel_hours are always real totals.
+func _summarize_route(route: Array) -> Dictionary:
+	var now: float = Game.game_clock.get_current_time_days()
+	var first_leg: Dictionary = route[0]
+	return {
+		"distance_km": TravelRouter.total_distance_km(route),
+		"travel_hours": TravelRouter.total_hours(route),
+		"arrival_time": now + TravelRouter.total_hours(route) / 24.0,
+		"vehicle_name": (first_leg["vehicle"] as VehicleData).vehicle_name,
+		"legs": route,
+	}
+
+## Starts a team on a (possibly multi-leg) journey toward a mission.
+## `route` comes from TravelRouter.find_routes(..., final_role=TACTICAL,
+## ...) — the player-chosen one, from the deploy UI's route picker. Only
+## the final leg is a TACTICAL hop; any earlier legs are TRANSPORT relays.
+## Marks members DEPLOYED — actual mission resolution happens later, on
+## arrival (EventManager listens for team_arrived), once every queued leg
+## has been flown.
+func begin_travel_route(team_id: String, route: Array, event_id: String) -> Dictionary:
+	var team := get_team(team_id)
+	if team == null or route.is_empty():
+		return {}
 
 	# Remember where they set out from so begin_return_travel() knows where
 	# "home" is once the mission concludes, without hardcoding HQ (matters
@@ -133,115 +169,112 @@ func begin_travel(team_id: String, destination: Vector2, destination_name: Strin
 	team.travel_return_to = team.location
 	team.travel_return_to_name = team.location_name
 	team.travel_is_return = false
-
-	team.is_traveling = true
-	team.travel_destination = destination
-	team.travel_destination_name = destination_name
-	team.travel_departure_day = now
-	team.travel_arrival_day = now + hours / 24.0
+	team.travel_is_relocation = false
 	team.travel_event_id = event_id
-	team.travel_vehicle_name = vehicle.vehicle_name
+	team.travel_queued_legs.assign(route.slice(1))
+	_start_leg(team, route[0])
+	return _summarize_route(route)
 
-	for agent_id in team.member_ids:
-		var a: AgentData = Game.agent_manager.get_agent_by_id(agent_id)
-		if a != null and a.is_available():
-			Game.agent_manager.set_status(agent_id, AgentData.Status.DEPLOYED)
-
-	team_departed.emit(team_id)
-	print("[TeamManager] %s departed for %s via %s (%.0f km, %s)" % [
-		team.team_name, destination_name, vehicle.vehicle_name, distance,
-		VehicleData.format_duration(hours),
-	])
-	return {
-		"distance_km": distance, "travel_hours": hours,
-		"arrival_time": team.travel_arrival_day, "vehicle_name": vehicle.vehicle_name,
-	}
-
-## Relocates a team to a different base via a TRANSPORT vehicle — the
-## base-to-base counterpart to begin_travel(), which only ever moves a
-## team to/from a mission. Same plan-dict shape and vehicle_override
-## behavior as begin_travel(), but the reverse role restriction: only a
-## TRANSPORT vehicle is accepted, a TACTICAL one is rejected even as an
-## explicit override. No event, no return leg — see TeamData.
-## travel_is_relocation for what that changes on arrival.
-func begin_base_transfer(team_id: String, destination_base: BaseData,
-		vehicle_override: VehicleData = null) -> Dictionary:
+## Relocates a team to a different base, possibly via relay bases — the
+## base-to-base counterpart to begin_travel_route(). `route` comes from
+## TravelRouter.find_routes(..., final_role=TRANSPORT, ...) via the
+## relocation UI's route picker; every leg (including the last) is
+## TRANSPORT. No event, no return leg — see TeamData.travel_is_relocation
+## for what that changes on final arrival.
+func begin_base_transfer_route(team_id: String, route: Array) -> Dictionary:
 	var team := get_team(team_id)
-	if team == null or destination_base == null:
+	if team == null or route.is_empty():
 		return {}
 
-	var distance := GeoData.haversine_km(team.location.y, team.location.x,
-			destination_base.location.y, destination_base.location.x)
-	var vehicle := vehicle_override if vehicle_override != null \
-			else get_best_vehicle(distance, team.member_ids.size(), VehicleData.Role.TRANSPORT)
-	if vehicle == null or vehicle.role != VehicleData.Role.TRANSPORT \
-			or not vehicle.can_reach(distance) or not vehicle.can_carry(team.member_ids.size()):
-		push_warning("[TeamManager] no usable transport to reach %s (%.0f km) with a team of %d" % [
-			destination_base.base_name, distance, team.member_ids.size(),
-		])
-		return {}
-
-	var hours := vehicle.compute_travel_hours(distance)
-	var now: float = Game.game_clock.get_current_time_days()
-
-	team.is_traveling = true
-	team.travel_destination = destination_base.location
-	team.travel_destination_name = destination_base.base_name
-	team.travel_departure_day = now
-	team.travel_arrival_day = now + hours / 24.0
 	team.travel_is_relocation = true
-	team.travel_vehicle_name = vehicle.vehicle_name
+	team.travel_is_return = false
+	team.travel_event_id = ""
+	team.travel_queued_legs.assign(route.slice(1))
+	_start_leg(team, route[0])
+	return _summarize_route(route)
 
-	for agent_id in team.member_ids:
-		var a: AgentData = Game.agent_manager.get_agent_by_id(agent_id)
-		if a != null and a.is_available():
-			Game.agent_manager.set_status(agent_id, AgentData.Status.DEPLOYED)
-
-	team_departed.emit(team_id)
-	print("[TeamManager] %s transporting to %s via %s (%.0f km, %s)" % [
-		team.team_name, destination_base.base_name, vehicle.vehicle_name, distance,
-		VehicleData.format_duration(hours),
-	])
-	return {
-		"distance_km": distance, "travel_hours": hours,
-		"arrival_time": team.travel_arrival_day, "vehicle_name": vehicle.vehicle_name,
-	}
-
-## Sends a team back to wherever they departed from after a mission
-## concludes. Members stay DEPLOYED (set by begin_travel and never
+## Sends a team back toward a base after a mission concludes — routed via
+## TravelRouter (possibly multi-leg), auto-picking the fastest route with
+## no player involvement, since this fires reactively once the mission
+## resolves. Members stay DEPLOYED (set by begin_travel_route and never
 ## reverted) until _complete_travel applies their real outcome statuses on
-## arrival — so a team is genuinely unavailable for the whole round trip,
-## not just the outbound leg.
+## the final arrival — so a team is genuinely unavailable for the whole
+## round trip, not just the outbound leg.
+##
+## If any agent came back INJURED or KIA, the team diverts to the nearest
+## base to their current location instead of trekking all the way back to
+## where they departed from — wounded agents get to safety fastest, not
+## the full journey home. Either way this is travel_is_return=true, since
+## that flag's meaning ("apply pending_agent_results on final arrival") is
+## correct regardless of which base they actually land at.
 func begin_return_travel(team_id: String) -> void:
 	var team := get_team(team_id)
 	if team == null:
 		return
 
-	var distance := GeoData.haversine_km(team.location.y, team.location.x,
-			team.travel_return_to.y, team.travel_return_to.x)
-	var vehicle := get_best_vehicle(distance, team.member_ids.size())
-	var hours := vehicle.compute_travel_hours(distance) if vehicle else 24.0
-	var now: float = Game.game_clock.get_current_time_days()
+	var casualty := false
+	for status: AgentData.Status in team.pending_agent_results.values():
+		if status == AgentData.Status.INJURED or status == AgentData.Status.KIA:
+			casualty = true
+			break
 
-	team.is_traveling = true
-	team.travel_destination = team.travel_return_to
-	team.travel_destination_name = team.travel_return_to_name
-	team.travel_departure_day = now
-	team.travel_arrival_day = now + hours / 24.0
+	var target_base: BaseData = Game.base_manager.get_nearest_base(team.location) if casualty \
+			else Game.base_manager.get_base_at(team.travel_return_to)
+
+	if target_base == null:
+		# Couldn't resolve a real base (e.g. travel_return_to's coordinate
+		# doesn't exactly match a known base) -- fall back to the raw
+		# coordinate directly, same as today's pre-routing behavior.
+		team.travel_is_return = true
+		_begin_return_flat(team, team.travel_return_to, team.travel_return_to_name)
+		return
+
 	team.travel_is_return = true
-	if vehicle:
-		team.travel_vehicle_name = vehicle.vehicle_name
+	var routes := TravelRouter.find_routes(team.location, team.location_name,
+			target_base.location, target_base.base_name, team.member_ids.size(),
+			VehicleData.Role.TRANSPORT, Game.base_manager.bases, team.current_vehicle)
 
-	team_departed.emit(team_id)
-	print("[TeamManager] %s began return trip to %s (%.0f km, %s)" % [
-		team.team_name, team.travel_destination_name, distance,
-		VehicleData.format_duration(hours),
+	if routes.is_empty():
+		_begin_return_flat(team, target_base.location, target_base.base_name)
+		return
+
+	team.travel_queued_legs.assign(routes[0].slice(1))
+	_start_leg(team, routes[0][0])
+
+## Always-succeeds fallback for when no real route can be found (stranded
+## edge case) — a flat, vehicleless 24h trip home, matching this
+## project's existing degrade-gracefully behavior for "no vehicle found."
+func _begin_return_flat(team: TeamData, destination: Vector2, destination_name: String) -> void:
+	var now: float = Game.game_clock.get_current_time_days()
+	team.is_traveling = true
+	team.travel_destination = destination
+	team.travel_destination_name = destination_name
+	team.travel_departure_day = now
+	team.travel_arrival_day = now + 1.0
+	team.travel_queued_legs = []
+
+	team_departed.emit(team.id)
+	print("[TeamManager] %s began return trip to %s (no vehicle found, flat 24h)" % [
+		team.team_name, destination_name,
 	])
 
 func _complete_travel(team: TeamData) -> void:
 	team.location = team.travel_destination
 	team.location_name = team.travel_destination_name
 	team.is_traveling = false
+
+	# Parks the vehicle here if this arrival is at a real base (relay stop
+	# or final arrival alike) — a mission site owns no fleet, so away from
+	# every base the vehicle just stays with the team (get_base_at returns
+	# null there, so this is a no-op).
+	var arrived_base := Game.base_manager.get_base_at(team.location)
+	if arrived_base != null:
+		_release_vehicle(team, arrived_base)
+
+	if not team.travel_queued_legs.is_empty():
+		var next_leg: Dictionary = team.travel_queued_legs.pop_front()
+		_start_leg(team, next_leg)
+		return
 
 	if team.travel_is_relocation:
 		team.travel_is_relocation = false

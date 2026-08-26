@@ -9,12 +9,14 @@ class_name BaseManager
 ## regardless of base.
 ##
 ## Seeds itself with HQ + one field base if left empty (two bases, to have
-## a real second one for base/transport features to work against). But
-## get_primary_base()/get_all_vehicles()/get_all_equipment() below are
-## still explicitly stand-ins for "which base is this team/agent actually
-## at" — there's no such link yet (teams don't have a home base), so
-## everything still pools across all bases indiscriminately regardless of
-## how many exist. Wiring real per-base availability is a separate pass.
+## a real second one for base/transport features to work against).
+## Vehicles are exclusive per-base assets now (TravelRouter only ever
+## searches a specific base's own `vehicles`, never a global pool — see
+## TeamManager._pickup_vehicle/_release_vehicle for how a vehicle moves
+## between a base and whichever team currently has it in transit).
+## get_all_equipment() below is still a genuine pooled stand-in, though —
+## there's no agent-to-base link for equipment the way travel routing now
+## has for vehicles; see its own doc comment.
 
 @export var bases: Array[BaseData] = []
 
@@ -35,7 +37,7 @@ func _ready() -> void:
 func _create_hq() -> BaseData:
 	var hq := BaseData.new().setup("HQ (Berlin, Germany)", Vector2(13.405, 52.52))
 	hq.vehicles = [
-		preload("res://data/vehicles/eurocopter_h225.tres"),
+		preload("res://data/vehicles/eurocopter_h225.tres").duplicate(),
 		preload("res://data/vehicles/x9_nightfall.tres"),
 	]
 	return hq
@@ -43,15 +45,18 @@ func _create_hq() -> BaseData:
 ## Second base, purely so base/transport features (per-base fleets, fast
 ## travel between fixed bases, founding/upgrading additional bases — see
 ## GDD §12) have a real second base to work against instead of a
-## hypothetical. Shares the same preloaded vehicle resources as the HQ
-## where they overlap (the Eurocopter) — safe since nothing anywhere
-## mutates a VehicleData at runtime (TeamManager only reads it). Its own
-## long-hauler (rather than a second Nightfall) gives each base a
-## distinct fleet instead of a mirrored one.
+## hypothetical. Its own long-hauler (rather than a second Nightfall)
+## gives each base a distinct fleet instead of a mirrored one. Its own
+## Eurocopter is a .duplicate() of HQ's, not the same shared resource —
+## vehicles are exclusive, physical-instance resources now (see
+## TeamManager._pickup_vehicle/_release_vehicle): erasing one from a
+## base's `vehicles` array wouldn't remove a second reference to the same
+## object sitting in a different base's array too, so two bases can never
+## share one vehicle instance, only the same *kind* of vehicle.
 func _create_east_coast_base() -> BaseData:
 	var base := BaseData.new().setup("Field Station (New York, USA)", Vector2(-74.006, 40.7128))
 	base.vehicles = [
-		preload("res://data/vehicles/eurocopter_h225.tres"),
+		preload("res://data/vehicles/eurocopter_h225.tres").duplicate(),
 		preload("res://data/vehicles/c130j_a.tres"),
 	]
 	return base
@@ -60,14 +65,6 @@ func _create_east_coast_base() -> BaseData:
 ## for a real per-team home base — see class comment.
 func get_primary_base() -> BaseData:
 	return bases[0] if not bases.is_empty() else null
-
-## Every vehicle across every base, pooled. Stand-in for a team looking up
-## its own base's fleet specifically — see class comment.
-func get_all_vehicles() -> Array[VehicleData]:
-	var out: Array[VehicleData] = []
-	for base: BaseData in bases:
-		out.append_array(base.vehicles)
-	return out
 
 ## Every equipment item available anywhere: global_equipment plus every
 ## base's local_equipment, pooled. Stand-in for filtering by which base an
@@ -153,3 +150,17 @@ func get_base_at(location: Vector2) -> BaseData:
 		if base.location == location:
 			return base
 	return null
+
+## The base nearest this location (straight-line haversine distance).
+## Used by TeamManager.begin_return_travel() to pick a divert-to-nearest-
+## base target when an agent came back injured/KIA, instead of routing
+## all the way home. Returns null only if bases is empty.
+func get_nearest_base(location: Vector2) -> BaseData:
+	var best: BaseData = null
+	var best_dist := INF
+	for base: BaseData in bases:
+		var d := GeoData.haversine_km(location.y, location.x, base.location.y, base.location.x)
+		if d < best_dist:
+			best_dist = d
+			best = base
+	return best

@@ -1,36 +1,18 @@
 extends Control
 class_name RootUI
-## RootUI — manages the dual-sidebar layout, referenced elsewhere via
-## Game.root_ui (registers itself in _ready() — see game.gd) so
-## dynamically-created views (e.g. RightSlideoutViewHire) can open the
-## left sidebar without needing a %-lookup, which doesn't work from
-## runtime-created nodes. Right sidebar holds overview
-## tabs (Squads, Events, Research, Equipment, Bases — switched via a
-## vertical icon column below RightToggle rather than the TabContainer's
-## own tab bar, which ran out of room once there were enough tabs to need
-## scrolling); left sidebar shows details for whatever is selected on the
-## right. Both sidebars slide open/closed, and each has its own pop-out
-## panel (SlideoutPanel on the left, RightSlideoutPanel on the right) for
-## content that isn't a persistent sidebar tab — drill-downs and the event
-## log on the left (opened from a button below LeftToggle), "detail/
-## action" screens like hiring on the right (opened from the "Hire" button
-## next to "+ New Squad" at the bottom of the Squads tab — agent_tab.gd —
-## rather than its own icon here, since it's roster-adjacent, not really a
-## tab switch). The two pop-outs auto-avoid overlapping — see
-## _slideouts_would_overlap().
 
 const SIDEBAR_W := 320.0
 const SLIDEOUT_W := 260.0
 const TOGGLE_W := 24.0
 const ANIM_SPEED := 0.15
 
-var _left_open := false
+var _left_open := true
 var _right_open := true
 
 func _ready() -> void:
 	Game.root_ui = self
-	$LeftToggle.pressed.connect(_toggle_left)
-	$RightToggle.pressed.connect(_toggle_right)
+	%DetailPanel/LeftToggle.pressed.connect(_toggle_left)
+	$RightSidebar/Layout/RightTabIcons/RightToggle.pressed.connect(_toggle_right)
 	%EventLogToggle.pressed.connect(func() -> void: Game.slideout_panel.show_event_log())
 
 	%SquadsIcon.pressed.connect(func() -> void: %Tabs.current_tab = 0)
@@ -96,23 +78,20 @@ func _toggle_right() -> void:
 
 
 func _apply_left(animate: bool) -> void:
-	var sb_l := 0.0 if _left_open else -SIDEBAR_W
-	var sb_r := SIDEBAR_W if _left_open else 0.0
-	var tg_l := SIDEBAR_W if _left_open else 0.0
-	var tg_r := SIDEBAR_W + TOGGLE_W if _left_open else TOGGLE_W
-	$LeftToggle.text = "◀" if _left_open else "▶"
+	# Closed still leaves TOGGLE_W on screen (the toggle rail sits at the
+	# end of the sidebar's HBox) so LeftToggle stays clickable instead of
+	# sliding off with the content panel.
+	var sb_l := 0.0 if _left_open else -(SIDEBAR_W - TOGGLE_W)
+	var sb_r := SIDEBAR_W if _left_open else TOGGLE_W
+	%DetailPanel/LeftToggle.text = "◀" if _left_open else "▶"
 
 	if animate:
 		var tw := create_tween().set_parallel()
 		tw.tween_property($LeftSidebar, "offset_left", sb_l, ANIM_SPEED)
 		tw.tween_property($LeftSidebar, "offset_right", sb_r, ANIM_SPEED)
-		tw.tween_property($LeftToggle, "offset_left", tg_l, ANIM_SPEED)
-		tw.tween_property($LeftToggle, "offset_right", tg_r, ANIM_SPEED)
 	else:
 		$LeftSidebar.offset_left = sb_l
 		$LeftSidebar.offset_right = sb_r
-		$LeftToggle.offset_left = tg_l
-		$LeftToggle.offset_right = tg_r
 
 	_apply_slideout(animate)
 
@@ -120,8 +99,8 @@ func _apply_left(animate: bool) -> void:
 func _apply_slideout(animate: bool) -> void:
 	var base := SIDEBAR_W + TOGGLE_W if _left_open else TOGGLE_W
 	var so_visible: bool = Game.slideout_panel.visible
-	var so_l := base if so_visible else base - SLIDEOUT_W
-	var so_r := base + SLIDEOUT_W if so_visible else base
+	var so_l := base if so_visible else base - SLIDEOUT_W+50
+	var so_r := base + SLIDEOUT_W+15 if so_visible else base+15
 
 	if animate:
 		var tw := create_tween().set_parallel()
@@ -133,26 +112,22 @@ func _apply_slideout(animate: bool) -> void:
 
 
 func _apply_right(animate: bool) -> void:
-	var sb_l := -SIDEBAR_W if _right_open else 0.0
-	var sb_r := 0.0 if _right_open else SIDEBAR_W
-	var tg_l := -(SIDEBAR_W + TOGGLE_W) if _right_open else -TOGGLE_W
-	var tg_r := -SIDEBAR_W if _right_open else 0.0
-	$RightToggle.text = "▶" if _right_open else "◀"
+	# Mirrors _apply_left: closed still leaves TOGGLE_W on screen (the
+	# toggle rail sits at the START of RightSidebar's HBox) so RightToggle
+	# stays clickable instead of sliding off with the content panel.
+	var sb_l := -SIDEBAR_W if _right_open else -TOGGLE_W
+	var sb_r := 0.0 if _right_open else SIDEBAR_W - TOGGLE_W
+	%RightToggle.text = "▶" if _right_open else "◀"
 
 	if animate:
 		var tw := create_tween().set_parallel()
 		tw.tween_property($RightSidebar, "offset_left", sb_l, ANIM_SPEED)
 		tw.tween_property($RightSidebar, "offset_right", sb_r, ANIM_SPEED)
-		tw.tween_property($RightToggle, "offset_left", tg_l, ANIM_SPEED)
-		tw.tween_property($RightToggle, "offset_right", tg_r, ANIM_SPEED)
 	else:
 		$RightSidebar.offset_left = sb_l
 		$RightSidebar.offset_right = sb_r
-		$RightToggle.offset_left = tg_l
-		$RightToggle.offset_right = tg_r
 
 	_apply_right_slideout(animate)
-
 
 func _apply_right_slideout(animate: bool) -> void:
 	var base := SIDEBAR_W + TOGGLE_W if _right_open else TOGGLE_W

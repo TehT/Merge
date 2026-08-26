@@ -22,6 +22,17 @@ var cohesion: float = 0.0
 var location: Vector2 = Vector2.ZERO
 var location_name: String = ""
 
+## The specific vehicle this team currently has with them, or null if
+## they're not holding one (idle at a base with nothing checked out). A
+## vehicle in transit belongs exclusively to whichever team is using it —
+## removed from its base's own fleet the moment they take it (see
+## TeamManager._pickup_vehicle) and returned to whichever base they next
+## arrive at, unless they're away from every base (e.g. sitting at a
+## mission site), in which case it just stays with them (see
+## TeamManager._release_vehicle / _complete_travel). Never available to a
+## different team's route search while attached to this one.
+var current_vehicle: VehicleData = null
+
 ## Travel state. is_traveling is what "away from location" means; the
 ## other fields are only meaningful while it's true. travel_event_id ties
 ## the trip back to the event EventManager should resolve on arrival.
@@ -41,9 +52,24 @@ var travel_arrival_day: float = 0.0
 var travel_event_id: String = ""
 var travel_vehicle_name: String = ""
 var travel_is_return: bool = false
+
+## Where a mission-deploy journey originally departed from, and the
+## routing target for the trip home — resolved to a base via
+## BaseManager.get_base_at()/get_nearest_base() and run through
+## TravelRouter.find_routes() (TeamManager.begin_return_travel()), not
+## necessarily a single hop.
 var travel_return_to: Vector2 = Vector2.ZERO
 var travel_return_to_name: String = ""
 var pending_agent_results: Dictionary = {} # agent_id -> AgentData.Status
+
+## Legs still to fly after whichever leg is currently in flight (i.e.
+## travel_destination/travel_arrival_day) — a multi-leg journey built by
+## TravelRouter. Empty for a direct (single-leg) trip. Consumed one at a
+## time by TeamManager._complete_travel as each leg's arrival is
+## processed; the terminal-intent flags below (travel_is_return/
+## travel_is_relocation/travel_event_id) are set once at journey start and
+## only acted on once this empties out.
+var travel_queued_legs: Array[Dictionary] = []
 
 ## True for a base-to-base relocation (TeamManager.begin_base_transfer),
 ## as opposed to a mission deployment/return trip. A relocation has no

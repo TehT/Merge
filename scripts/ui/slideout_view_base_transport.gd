@@ -1,16 +1,18 @@
 extends "res://scripts/ui/slideout_view_base.gd"
-## SlideoutViewBaseTransport — relocate a team to a different base via a
-## TRANSPORT-role vehicle: pick a destination base, see distance/travel
-## time, pick an aircraft (auto-selects the best fit, overridable), and
-## confirm. Opened by clicking a stationary team's Location row on its
-## detail sheet. Mirrors SlideoutViewDeploy's shape, but for
-## TeamManager.begin_base_transfer() instead of a mission deployment —
-## only one team to consider (whichever page this was opened from) and
-## the destination is a base picker instead of fixed to one event.
+## SlideoutViewBaseTransport — relocate a team to a different base,
+## possibly via relay bases: pick a destination base, see every viable
+## route there (direct or relayed, via TravelRouter, ranked fastest
+## first, auto-selects the fastest but overridable), and confirm. Opened
+## by clicking a stationary team's Location row on its detail sheet.
+## Mirrors SlideoutViewDeploy's shape, but for
+## TeamManager.begin_base_transfer_route() instead of a mission
+## deployment — only one team to consider (whichever page this was
+## opened from) and the destination is a base picker instead of fixed to
+## one event.
 
 var _team: TeamData
 var _destination_dropdown: OptionButton
-var _vehicle_dropdown: OptionButton
+var _route_dropdown: OptionButton
 var _travel_lbl: Label
 var _confirm_btn: Button
 
@@ -42,6 +44,7 @@ func populate(team: TeamData, on_close: Callable) -> void:
 	_destination_dropdown = OptionButton.new()
 	_destination_dropdown.focus_mode = Control.FOCUS_NONE
 	_destination_dropdown.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_destination_dropdown.clip_text = true
 	for i in range(destinations.size()):
 		_destination_dropdown.add_item(destinations[i].base_name)
 		_destination_dropdown.set_item_metadata(i, destinations[i])
@@ -49,15 +52,17 @@ func populate(team: TeamData, on_close: Callable) -> void:
 	add_child(_destination_dropdown)
 
 	_travel_lbl = Label.new()
+	_travel_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_travel_lbl.add_theme_font_size_override("font_size", 11)
 	_travel_lbl.add_theme_color_override("font_color", Color(0.55, 0.55, 0.6, 1.0))
 	add_child(_travel_lbl)
 
-	_vehicle_dropdown = OptionButton.new()
-	_vehicle_dropdown.focus_mode = Control.FOCUS_NONE
-	_vehicle_dropdown.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_vehicle_dropdown.item_selected.connect(func(_idx: int) -> void: _update_travel_label())
-	add_child(_vehicle_dropdown)
+	_route_dropdown = OptionButton.new()
+	_route_dropdown.focus_mode = Control.FOCUS_NONE
+	_route_dropdown.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_route_dropdown.clip_text = true  # long route descriptions must truncate, not force the panel wider -- see the matching note in slideout_view_deploy.gd
+	_route_dropdown.item_selected.connect(func(_idx: int) -> void: _update_travel_label())
+	add_child(_route_dropdown)
 
 	add_child(HSeparator.new())
 
@@ -80,58 +85,47 @@ func _current_destination() -> BaseData:
 	return _destination_dropdown.get_item_metadata(_destination_dropdown.get_selected())
 
 
-## Rebuilds the vehicle dropdown for whichever destination is now
-## selected — eligible Transport vehicles selectable (best fit
-## pre-picked), ineligible ones shown disabled with why, same pattern as
-## SlideoutViewDeploy's vehicle dropdown.
+## Rebuilds the route dropdown for whichever destination is now selected —
+## every viable route TravelRouter finds, ranked fastest first (item 0
+## pre-selected), same pattern as SlideoutViewDeploy's route dropdown.
 func _refresh_options() -> void:
 	var dest := _current_destination()
-	var distance := GeoData.haversine_km(_team.location.y, _team.location.x, dest.location.y, dest.location.x)
 	var team_size := _team.member_ids.size()
 
-	_vehicle_dropdown.clear()
-	var fleet: Array[VehicleData] = Game.base_manager.get_all_vehicles().filter(
-		func(v: VehicleData) -> bool: return v.role == VehicleData.Role.TRANSPORT)
-	var best := Game.team_manager.get_best_vehicle(distance, team_size, VehicleData.Role.TRANSPORT)
-	var default_idx := 0
-	for i in range(fleet.size()):
-		var v: VehicleData = fleet[i]
-		var eligible := v.can_reach(distance) and v.can_carry(team_size)
-		var label := v.vehicle_name
-		if not eligible:
-			label += " — out of range" if not v.can_reach(distance) else " — over capacity"
-		_vehicle_dropdown.add_item(label)
-		_vehicle_dropdown.set_item_metadata(i, v)
-		_vehicle_dropdown.set_item_disabled(i, not eligible)
-		if v == best:
-			default_idx = i
-	if fleet.size() > 0:
-		_vehicle_dropdown.select(default_idx)
+	_route_dropdown.clear()
+	var routes: Array = TravelRouter.find_routes(_team.location, _team.location_name,
+			dest.location, dest.base_name, team_size, VehicleData.Role.TRANSPORT,
+			Game.base_manager.bases, _team.current_vehicle)
+	for i in range(routes.size()):
+		var route: Array = routes[i]
+		_route_dropdown.add_item(TravelRouter.describe(route))
+		_route_dropdown.set_item_metadata(i, route)
+	if routes.size() > 0:
+		_route_dropdown.select(0)
 
 	_update_travel_label()
 
 
 func _update_travel_label() -> void:
 	var dest := _current_destination()
-	var distance := GeoData.haversine_km(_team.location.y, _team.location.x, dest.location.y, dest.location.x)
-	var vehicle: VehicleData = _vehicle_dropdown.get_item_metadata(_vehicle_dropdown.get_selected()) \
-			if _vehicle_dropdown.item_count > 0 else null
+	var route: Array = _route_dropdown.get_item_metadata(_route_dropdown.get_selected()) \
+			if _route_dropdown.item_count > 0 else []
 
-	if vehicle == null:
-		_travel_lbl.text = "%d km — no Transport vehicle can reach this" % int(round(distance))
+	if route.is_empty():
+		var distance := GeoData.haversine_km(_team.location.y, _team.location.x, dest.location.y, dest.location.x)
+		_travel_lbl.text = "%d km — no Transport route reaches this" % int(round(distance))
 		_confirm_btn.disabled = true
 		return
 
-	var hours := vehicle.compute_travel_hours(distance)
-	_travel_lbl.text = "%d km — ~%s via %s" % [
-		int(round(distance)), VehicleData.format_duration(hours), vehicle.vehicle_name]
-	_confirm_btn.disabled = not vehicle.can_reach(distance) or not vehicle.can_carry(_team.member_ids.size())
+	_travel_lbl.text = "%d km — %s" % [
+		int(round(TravelRouter.total_distance_km(route))), TravelRouter.describe(route)]
+	_confirm_btn.disabled = false
 
 
 func _on_transport_pressed(on_close: Callable) -> void:
 	var dest := _current_destination()
-	var vehicle: VehicleData = _vehicle_dropdown.get_item_metadata(_vehicle_dropdown.get_selected())
-	var plan: Dictionary = Game.team_manager.begin_base_transfer(_team.id, dest, vehicle)
+	var selected_route: Array = _route_dropdown.get_item_metadata(_route_dropdown.get_selected())
+	var plan: Dictionary = Game.team_manager.begin_base_transfer_route(_team.id, selected_route)
 	if plan.is_empty():
 		return
 	var team_name := _team.team_name

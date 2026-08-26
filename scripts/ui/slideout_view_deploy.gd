@@ -1,7 +1,9 @@
 extends "res://scripts/ui/slideout_view_base.gd"
 ## SlideoutViewDeploy — squad picker for deploying to an event: every
-## non-empty squad with match %, availability, a vehicle dropdown
-## (auto-selects the best fit, but overridable), and a Deploy button.
+## non-empty squad with match %, availability, a route dropdown (every
+## viable way to get there — direct or relayed through a Transport hop to
+## another base, via TravelRouter — ranked fastest first, auto-selects the
+## fastest but overridable), and a Deploy button.
 
 var _event: EventData
 
@@ -50,8 +52,10 @@ func _make_deploy_row(team: TeamData, on_close: Callable) -> Control:
 	var available := _get_available_team_members(team)
 	var distance := GeoData.haversine_km(team.location.y, team.location.x,
 			_event.geo_coordinates.y, _event.geo_coordinates.x)
-	var best_vehicle: VehicleData = Game.team_manager.get_best_vehicle(distance, available.size())
-	var in_range := best_vehicle != null
+	var routes: Array = TravelRouter.find_routes(team.location, team.location_name,
+			_event.geo_coordinates, _event.location_city, available.size(),
+			VehicleData.Role.TACTICAL, Game.base_manager.bases, team.current_vehicle)
+	var in_range := not routes.is_empty()
 	var can_deploy := not available.is_empty() and not team.is_traveling and not team.is_on_mission and in_range
 
 	var name_lbl := Label.new()
@@ -102,17 +106,18 @@ func _make_deploy_row(team: TeamData, on_close: Callable) -> Control:
 	card.add_child(match_lbl)
 
 	var travel_lbl := Label.new()
+	travel_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	travel_lbl.add_theme_font_size_override("font_size", 11)
 	travel_lbl.add_theme_color_override("font_color", Color(0.55, 0.55, 0.6, 1.0))
 	card.add_child(travel_lbl)
 
-	var vehicle_dropdown: OptionButton = null
+	var route_dropdown: OptionButton = null
 	if in_range:
-		vehicle_dropdown = _make_vehicle_dropdown(distance, available.size(), best_vehicle)
-		vehicle_dropdown.item_selected.connect(func(_idx: int) -> void:
-			_update_travel_label(travel_lbl, vehicle_dropdown, distance))
-		card.add_child(vehicle_dropdown)
-		_update_travel_label(travel_lbl, vehicle_dropdown, distance)
+		route_dropdown = _make_route_dropdown(routes)
+		route_dropdown.item_selected.connect(func(_idx: int) -> void:
+			_update_travel_label(travel_lbl, route_dropdown))
+		card.add_child(route_dropdown)
+		_update_travel_label(travel_lbl, route_dropdown)
 	else:
 		travel_lbl.text = "%s km" % _format_distance(distance)
 
@@ -130,7 +135,7 @@ func _make_deploy_row(team: TeamData, on_close: Callable) -> Control:
 	deploy_btn.focus_mode = Control.FOCUS_NONE
 	if can_deploy:
 		deploy_btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	deploy_btn.pressed.connect(_on_deploy_pressed.bind(team, vehicle_dropdown, on_close))
+	deploy_btn.pressed.connect(_on_deploy_pressed.bind(team, route_dropdown, on_close))
 	row.add_child(deploy_btn)
 
 	card.add_child(HSeparator.new())
@@ -138,41 +143,29 @@ func _make_deploy_row(team: TeamData, on_close: Callable) -> Control:
 	return card
 
 
-## Lists every fleet vehicle for this trip, eligible ones selectable and
-## the auto-picked best one pre-selected; ineligible ones shown disabled
-## with why, so the fleet stays visible even when it can't help right now.
-func _make_vehicle_dropdown(distance: float, team_size: int, default_vehicle: VehicleData) -> OptionButton:
+## One item per candidate route (already ranked fastest-first by
+## TravelRouter), item 0 pre-selected — no disabled items needed since
+## every returned route is viable by construction, unlike the old flat
+## vehicle dropdown which had to show out-of-range/over-capacity options.
+func _make_route_dropdown(routes: Array) -> OptionButton:
 	var dropdown := OptionButton.new()
 	dropdown.focus_mode = Control.FOCUS_NONE
 	dropdown.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	dropdown.clip_text = true  # a long route description (relay + vehicle names) must truncate, not force the whole slideout panel wider -- ScrollContainer's horizontal scroll is disabled here, so an oversized child's minimum width otherwise propagates straight up through it
 
-	var fleet: Array[VehicleData] = Game.base_manager.get_all_vehicles().filter(
-		func(v: VehicleData) -> bool: return v.role == VehicleData.Role.TACTICAL)
-	var default_idx := 0
-	for i in range(fleet.size()):
-		var v: VehicleData = fleet[i]
-		var eligible := v.can_reach(distance) and v.can_carry(team_size)
-		var label := v.vehicle_name
-		if not eligible:
-			label += " — out of range" if not v.can_reach(distance) else " — over capacity"
-		dropdown.add_item(label)
-		dropdown.set_item_metadata(i, v)
-		dropdown.set_item_disabled(i, not eligible)
-		if v == default_vehicle:
-			default_idx = i
+	for i in range(routes.size()):
+		var route: Array = routes[i]
+		dropdown.add_item(TravelRouter.describe(route))
+		dropdown.set_item_metadata(i, route)
 
-	dropdown.select(default_idx)
+	dropdown.select(0)
 	return dropdown
 
 
-func _update_travel_label(label: Label, dropdown: OptionButton, distance: float) -> void:
-	var vehicle: VehicleData = dropdown.get_item_metadata(dropdown.get_selected())
-	if vehicle == null:
-		label.text = "%s km" % _format_distance(distance)
-		return
-	var hours := vehicle.compute_travel_hours(distance)
-	label.text = "%s km — ~%s via %s" % [
-		_format_distance(distance), VehicleData.format_duration(hours), vehicle.vehicle_name]
+func _update_travel_label(label: Label, dropdown: OptionButton) -> void:
+	var route: Array = dropdown.get_item_metadata(dropdown.get_selected())
+	label.text = "%s km — %s" % [
+		_format_distance(TravelRouter.total_distance_km(route)), TravelRouter.describe(route)]
 
 
 func _format_distance(km: float) -> String:
@@ -188,12 +181,12 @@ func _format_distance(km: float) -> String:
 
 
 func _on_deploy_pressed(team: TeamData, dropdown: OptionButton, on_close: Callable) -> void:
+	if dropdown == null:
+		return
 	var team_name := team.team_name
 	var ev_title := _event.title
-	var selected_vehicle: VehicleData = null
-	if dropdown:
-		selected_vehicle = dropdown.get_item_metadata(dropdown.get_selected())
-	var plan: Dictionary = Game.event_manager.deploy_team(_event.id, team.id, selected_vehicle)
+	var selected_route: Array = dropdown.get_item_metadata(dropdown.get_selected())
+	var plan: Dictionary = Game.event_manager.deploy_team(_event.id, team.id, selected_route)
 	if plan.is_empty():
 		return
 	on_close.call()
