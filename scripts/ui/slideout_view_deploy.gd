@@ -146,7 +146,8 @@ func _make_vehicle_dropdown(distance: float, team_size: int, default_vehicle: Ve
 	dropdown.focus_mode = Control.FOCUS_NONE
 	dropdown.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 
-	var fleet: Array[VehicleData] = Game.base_manager.get_all_vehicles()
+	var fleet: Array[VehicleData] = Game.base_manager.get_all_vehicles().filter(
+		func(v: VehicleData) -> bool: return v.role == VehicleData.Role.TACTICAL)
 	var default_idx := 0
 	for i in range(fleet.size()):
 		var v: VehicleData = fleet[i]

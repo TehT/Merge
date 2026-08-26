@@ -77,11 +77,17 @@ func _process(_delta: float) -> void:
 ## across every base (see BaseManager.get_all_vehicles — a stand-in until
 ## teams track a home base to search just that base's fleet): fastest
 ## among those that can reach it and carry everyone, tie-broken by lowest
-## operation cost. Returns null if nothing available qualifies.
-func get_best_vehicle(distance_km: float, team_size: int) -> VehicleData:
+## operation cost. Only considers `role` vehicles (TACTICAL by default) —
+## a TRANSPORT vehicle (base-to-base logistics only) never gets picked for
+## mission deployment, even if it happens to be faster or longer-ranged.
+## Returns null if nothing available qualifies.
+func get_best_vehicle(distance_km: float, team_size: int,
+		role: VehicleData.Role = VehicleData.Role.TACTICAL) -> VehicleData:
 	var best: VehicleData = null
 	var best_hours := INF
 	for v: VehicleData in Game.base_manager.get_all_vehicles():
+		if v.role != role:
+			continue
 		if not v.can_reach(distance_km) or not v.can_carry(team_size):
 			continue
 		var hours := v.compute_travel_hours(distance_km)
@@ -99,9 +105,10 @@ func get_best_vehicle(distance_km: float, team_size: int) -> VehicleData:
 ##
 ## vehicle_override lets a caller (the deploy UI's dropdown) pick a
 ## specific fleet vehicle instead of the auto-selected best fit — still
-## validated here (range + capacity) rather than trusted blindly, so
-## TeamManager stays the single source of truth for what's actually
-## possible.
+## validated here (range + capacity + TACTICAL role) rather than trusted
+## blindly, so TeamManager stays the single source of truth for what's
+## actually possible. A TRANSPORT vehicle is rejected even as an explicit
+## override — it's base-to-base logistics only, never a mission runner.
 func begin_travel(team_id: String, destination: Vector2, destination_name: String, event_id: String,
 		vehicle_override: VehicleData = null) -> Dictionary:
 	var team := get_team(team_id)
@@ -110,7 +117,8 @@ func begin_travel(team_id: String, destination: Vector2, destination_name: Strin
 
 	var distance := GeoData.haversine_km(team.location.y, team.location.x, destination.y, destination.x)
 	var vehicle := vehicle_override if vehicle_override != null else get_best_vehicle(distance, team.member_ids.size())
-	if vehicle == null or not vehicle.can_reach(distance) or not vehicle.can_carry(team.member_ids.size()):
+	if vehicle == null or vehicle.role != VehicleData.Role.TACTICAL \
+			or not vehicle.can_reach(distance) or not vehicle.can_carry(team.member_ids.size()):
 		push_warning("[TeamManager] no usable vehicle to reach %s (%.0f km) with a team of %d" % [
 			destination_name, distance, team.member_ids.size(),
 		])
@@ -142,6 +150,56 @@ func begin_travel(team_id: String, destination: Vector2, destination_name: Strin
 	team_departed.emit(team_id)
 	print("[TeamManager] %s departed for %s via %s (%.0f km, %s)" % [
 		team.team_name, destination_name, vehicle.vehicle_name, distance,
+		VehicleData.format_duration(hours),
+	])
+	return {
+		"distance_km": distance, "travel_hours": hours,
+		"arrival_time": team.travel_arrival_day, "vehicle_name": vehicle.vehicle_name,
+	}
+
+## Relocates a team to a different base via a TRANSPORT vehicle — the
+## base-to-base counterpart to begin_travel(), which only ever moves a
+## team to/from a mission. Same plan-dict shape and vehicle_override
+## behavior as begin_travel(), but the reverse role restriction: only a
+## TRANSPORT vehicle is accepted, a TACTICAL one is rejected even as an
+## explicit override. No event, no return leg — see TeamData.
+## travel_is_relocation for what that changes on arrival.
+func begin_base_transfer(team_id: String, destination_base: BaseData,
+		vehicle_override: VehicleData = null) -> Dictionary:
+	var team := get_team(team_id)
+	if team == null or destination_base == null:
+		return {}
+
+	var distance := GeoData.haversine_km(team.location.y, team.location.x,
+			destination_base.location.y, destination_base.location.x)
+	var vehicle := vehicle_override if vehicle_override != null \
+			else get_best_vehicle(distance, team.member_ids.size(), VehicleData.Role.TRANSPORT)
+	if vehicle == null or vehicle.role != VehicleData.Role.TRANSPORT \
+			or not vehicle.can_reach(distance) or not vehicle.can_carry(team.member_ids.size()):
+		push_warning("[TeamManager] no usable transport to reach %s (%.0f km) with a team of %d" % [
+			destination_base.base_name, distance, team.member_ids.size(),
+		])
+		return {}
+
+	var hours := vehicle.compute_travel_hours(distance)
+	var now: float = Game.game_clock.get_current_time_days()
+
+	team.is_traveling = true
+	team.travel_destination = destination_base.location
+	team.travel_destination_name = destination_base.base_name
+	team.travel_departure_day = now
+	team.travel_arrival_day = now + hours / 24.0
+	team.travel_is_relocation = true
+	team.travel_vehicle_name = vehicle.vehicle_name
+
+	for agent_id in team.member_ids:
+		var a: AgentData = Game.agent_manager.get_agent_by_id(agent_id)
+		if a != null and a.is_available():
+			Game.agent_manager.set_status(agent_id, AgentData.Status.DEPLOYED)
+
+	team_departed.emit(team_id)
+	print("[TeamManager] %s transporting to %s via %s (%.0f km, %s)" % [
+		team.team_name, destination_base.base_name, vehicle.vehicle_name, distance,
 		VehicleData.format_duration(hours),
 	])
 	return {
@@ -184,6 +242,16 @@ func _complete_travel(team: TeamData) -> void:
 	team.location = team.travel_destination
 	team.location_name = team.travel_destination_name
 	team.is_traveling = false
+
+	if team.travel_is_relocation:
+		team.travel_is_relocation = false
+		for agent_id in team.member_ids:
+			var a: AgentData = Game.agent_manager.get_agent_by_id(agent_id)
+			if a != null and a.status == AgentData.Status.DEPLOYED:
+				Game.agent_manager.set_status(agent_id, AgentData.Status.AVAILABLE)
+		print("[TeamManager] %s relocated to %s" % [team.team_name, team.location_name])
+		team_arrived.emit(team.id, "") # empty event_id = "nothing to resolve"
+		return
 
 	if team.travel_is_return:
 		team.travel_is_return = false
@@ -258,6 +326,19 @@ func get_team_of_agent(agent_id: String) -> TeamData:
 		if t.has_member(agent_id):
 			return t
 	return null
+
+## Where an agent currently is, for base-local systems (equip-picking) to
+## filter by: the base matching their team's current location, or
+## BaseManager's primary base if they're not on a team at all (an
+## unassigned roster agent is treated as sitting at HQ, the same default
+## a brand-new team starts at). Returns null if their team is away from
+## every known base right now (traveling, or on-site at a mission) --
+## nothing base-local is reachable there.
+func get_agent_base(agent_id: String) -> BaseData:
+	var team := get_team_of_agent(agent_id)
+	if team == null:
+		return Game.base_manager.get_primary_base()
+	return Game.base_manager.get_base_at(team.location)
 
 ## Atomically replaces one member with another (e.g. backfilling an
 ## injured slot). Cuts cohesion proportionally — losing 1 of n members'

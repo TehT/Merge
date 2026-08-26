@@ -3,7 +3,13 @@ extends "res://scripts/ui/detail_view_base.gd"
 ## clickable, opening their info slideouts), squads and their status, a
 ## Base Upgrades placeholder. Equipment here is only what's local to this
 ## base (BaseData.local_equipment) — the right sidebar's Equipment tab
-## shows the full pool including org-wide global_equipment.
+## shows the full pool including org-wide global_equipment. Squads are
+## filtered the same way: only teams whose current location (TeamData.
+## location) matches this specific base — a team traveling away still
+## shows here (location doesn't update until arrival, see TeamManager.
+## _complete_travel), but one that's arrived at a mission or a different
+## base doesn't. The right sidebar's Squads tab (agent_tab.gd) stays a
+## flat, base-blind roster of every squad in the org.
 
 func populate(base: BaseData = null) -> void:
 	var hq := base if base != null else Game.base_manager.get_primary_base()
@@ -22,10 +28,11 @@ func populate(base: BaseData = null) -> void:
 
 	add_child(HSeparator.new())
 	_add_section("Squads")
-	var teams: Array[TeamData] = Game.team_manager.teams
+	var teams: Array[TeamData] = Game.team_manager.teams.filter(
+		func(t: TeamData) -> bool: return t.location == hq.location)
 	if teams.is_empty():
 		var none_lbl := Label.new()
-		none_lbl.text = "No squads formed yet."
+		none_lbl.text = "No squads at this base."
 		none_lbl.add_theme_font_size_override("font_size", 12)
 		none_lbl.add_theme_color_override("font_color", Color(0.45, 0.45, 0.5, 1.0))
 		add_child(none_lbl)
@@ -49,7 +56,7 @@ func populate(base: BaseData = null) -> void:
 		_add_placeholder_row("No base-local equipment.")
 	else:
 		for item: EquipmentData in local_equipment:
-			add_child(_make_equipment_row(item))
+			add_child(_make_equipment_row(item, hq.id))
 
 	add_child(HSeparator.new())
 	_add_section("Base Upgrades")
@@ -92,7 +99,7 @@ func _make_vehicle_row(vehicle: VehicleData) -> Control:
 	return row
 
 
-func _make_equipment_row(item: EquipmentData) -> Control:
+func _make_equipment_row(item: EquipmentData, base_id: String) -> Control:
 	var row := HBoxContainer.new()
 	row.mouse_filter = Control.MOUSE_FILTER_STOP
 	row.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
@@ -110,6 +117,6 @@ func _make_equipment_row(item: EquipmentData) -> Control:
 
 	row.gui_input.connect(func(input_event: InputEvent) -> void:
 		if input_event is InputEventMouseButton and input_event.pressed and input_event.button_index == MOUSE_BUTTON_LEFT:
-			Game.slideout_panel.show_equipment_info(item))
+			Game.slideout_panel.show_equipment_info(item, base_id))
 
 	return row

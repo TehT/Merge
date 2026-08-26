@@ -21,7 +21,22 @@ extends Resource
 
 enum Mode { CONTINUOUS, TELEPORT }
 
+## What a vehicle is actually usable for. TACTICAL is the default so any
+## pre-existing vehicle resource that doesn't set this explicitly keeps
+## its current behavior (mission deployment) rather than silently
+## changing.
+## - TACTICAL: can deploy a team to a mission/event (TeamManager.
+##   begin_travel/begin_return_travel only ever pick from these).
+## - TRANSPORT: moves gear and agents between bases — not usable for
+##   mission deployment even if manually picked. Nothing actually calls a
+##   base-to-base transport action yet (that's the eventual real backing
+##   for the equipment transfer system, currently instant — see
+##   BaseManager.transfer_equipment()); this is the typing that action
+##   will filter on once it exists.
+enum Role { TACTICAL, TRANSPORT }
+
 @export var vehicle_name: String = "Unnamed Vehicle"
+@export var role: Role = Role.TACTICAL
 @export var mode: Mode = Mode.CONTINUOUS
 @export_multiline var description: String = ""
 
@@ -80,3 +95,9 @@ func get_mode_name() -> String:
 	match mode:
 		Mode.TELEPORT: return "Teleport"
 		_: return "Continuous"
+
+
+func get_role_name() -> String:
+	match role:
+		Role.TRANSPORT: return "Transport"
+		_: return "Tactical"

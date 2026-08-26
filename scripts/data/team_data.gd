@@ -45,6 +45,14 @@ var travel_return_to: Vector2 = Vector2.ZERO
 var travel_return_to_name: String = ""
 var pending_agent_results: Dictionary = {} # agent_id -> AgentData.Status
 
+## True for a base-to-base relocation (TeamManager.begin_base_transfer),
+## as opposed to a mission deployment/return trip. A relocation has no
+## event to resolve and no return leg — arriving just means "this is
+## where the team lives now," so _complete_travel() restores members to
+## AVAILABLE immediately instead of holding them DEPLOYED pending a
+## mission outcome or a trip home.
+var travel_is_relocation: bool = false
+
 ## On-site mission work state — distinct from is_traveling, which only
 ## covers the physical travel legs before and after this. True from the
 ## moment a team physically arrives at a deployed event until

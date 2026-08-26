@@ -1,9 +1,7 @@
 extends VBoxContainer
 ## BasesTab — lists every base the player owns (Game.base_manager.bases)
 ## in the right sidebar. Clicking a row opens it in the left DetailPanel —
-## the same view/behavior as clicking the HQ marker on the map. Single-base
-## for now (see BaseManager's own docs), so this just lists the one HQ
-## today; ready to list more the moment a second base exists.
+## the same view/behavior as clicking the HQ marker on the map.
 
 signal base_selected(base: BaseData)
 

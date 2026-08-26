@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="VehicleData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/vehicle_data.gd" id="1_c130ja"]
+
+[resource]
+script = ExtResource("1_c130ja")
+vehicle_name = "C-130J-A"
+role = 1
+description = "The Agency's long-haul cargo hauler — an Agency-modified Super Hercules airframe with extended fuel bladders and a stripped cargo bay refitted for personnel and gear. Base-to-base logistics only, not a mission runner: it covers Berlin to New York and back with room to spare, carrying a lot more than the Nightfall can.
+"
+speed_kmh = 560.0
+max_range_km = 7500.0
+capacity = 20

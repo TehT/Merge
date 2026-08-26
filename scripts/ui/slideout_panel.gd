@@ -9,12 +9,14 @@ class_name SlideoutPanel
 ## (slideout_view_*.gd) so this file stays a thin dispatcher. Doubles as a
 ## drill-down for proficiency skills (clicking a proficiency bar), the
 ## squad picker for deploying a team to an event (clicking "Deploy Team"),
-## a vehicle info card (clicking a fleet vehicle in the HQ panel), a
-## read-only equipment info card (clicking a locker item in the Equipment
-## tab), the equip/unequip picker for one of an agent's equipment
+## a vehicle info card (clicking a fleet vehicle in the HQ panel), an
+## equipment info card with a transfer-to-another-location action
+## (clicking a locker item in the Equipment tab), the equip/unequip
+## picker for one of an agent's equipment
 ## slots (clicking a slot in the agent sheet), the Personality Matrix
-## drill-down (clicking the Archetype row in the agent sheet), and the
-## event log (the small button below the left sidebar toggle).
+## drill-down (clicking the Archetype row in the agent sheet), the
+## event log (the small button below the left sidebar toggle), and the
+## base-transport picker (clicking a stationary team's Location row).
 
 const SlideoutViewProficiency := preload("res://scripts/ui/slideout_view_proficiency.gd")
 const SlideoutViewDeploy := preload("res://scripts/ui/slideout_view_deploy.gd")
@@ -23,8 +25,9 @@ const SlideoutViewEquipment := preload("res://scripts/ui/slideout_view_equipment
 const SlideoutViewEquipSlot := preload("res://scripts/ui/slideout_view_equip_slot.gd")
 const SlideoutViewEventLog := preload("res://scripts/ui/slideout_view_event_log.gd")
 const SlideoutViewPersonality := preload("res://scripts/ui/slideout_view_personality.gd")
+const SlideoutViewBaseTransport := preload("res://scripts/ui/slideout_view_base_transport.gd")
 
-enum _Mode { NONE, PROFICIENCY, DEPLOY, VEHICLE, EQUIPMENT_INFO, EQUIP_SLOT, EVENT_LOG, PERSONALITY }
+enum _Mode { NONE, PROFICIENCY, DEPLOY, VEHICLE, EQUIPMENT_INFO, EQUIP_SLOT, EVENT_LOG, PERSONALITY, BASE_TRANSPORT }
 
 var _content: VBoxContainer
 var _mode: _Mode = _Mode.NONE
@@ -33,7 +36,9 @@ var _active_agent: AgentData
 var _active_event: EventData
 var _active_vehicle: VehicleData
 var _active_equipment: EquipmentData
+var _active_equipment_base_id: String = ""
 var _active_slot_type: String = ""
+var _active_team: TeamData
 
 
 func _ready() -> void:
@@ -107,17 +112,22 @@ func show_vehicle(vehicle: VehicleData) -> void:
 	visible = true
 
 
-func show_equipment_info(item: EquipmentData) -> void:
+## base_id is where item currently lives ("" for global_equipment, else a
+## BaseData.id) — SlideoutViewEquipment needs it to build the transfer
+## destination list (every other location) and to call
+## BaseManager.transfer_equipment() with the right source.
+func show_equipment_info(item: EquipmentData, base_id: String = "") -> void:
 	if _mode == _Mode.EQUIPMENT_INFO and _active_equipment == item and visible:
 		dismiss()
 		return
 
 	_mode = _Mode.EQUIPMENT_INFO
 	_active_equipment = item
+	_active_equipment_base_id = base_id
 	_clear_content()
 	var view: VBoxContainer = SlideoutViewEquipment.new()
 	_content.add_child(view)
-	view.populate(item, dismiss)
+	view.populate(item, base_id, dismiss)
 	visible = true
 
 
@@ -163,6 +173,20 @@ func show_personality(agent: AgentData) -> void:
 	visible = true
 
 
+func show_base_transport(team: TeamData) -> void:
+	if _mode == _Mode.BASE_TRANSPORT and _active_team == team and visible:
+		dismiss()
+		return
+
+	_mode = _Mode.BASE_TRANSPORT
+	_active_team = team
+	_clear_content()
+	var view: VBoxContainer = SlideoutViewBaseTransport.new()
+	_content.add_child(view)
+	view.populate(team, dismiss)
+	visible = true
+
+
 func dismiss() -> void:
 	visible = false
 	_mode = _Mode.NONE
@@ -171,7 +195,9 @@ func dismiss() -> void:
 	_active_event = null
 	_active_vehicle = null
 	_active_equipment = null
+	_active_equipment_base_id = ""
 	_active_slot_type = ""
+	_active_team = null
 
 
 func _clear_content() -> void:

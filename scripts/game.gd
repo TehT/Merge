@@ -10,6 +10,7 @@ var event_manager: EventManager
 var event_log: EventLog
 var hiring_manager: HiringManager
 var geo_data: GeoData
+var marker_layer: MarkerLayer
 
 var detail_sidebar: DetailSidebar
 var slideout_panel: SlideoutPanel

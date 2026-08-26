@@ -40,6 +40,7 @@ func _ready() -> void:
 	Game.agent_manager.agent_status_changed.connect(func(_aid: String, _o: AgentData.Status, _n: AgentData.Status) -> void: _schedule_refresh())
 	Game.agent_manager.roster_changed.connect(_schedule_refresh)
 	Game.event_manager.event_resolved.connect(_on_mission_resolved)
+	Game.base_manager.equipment_changed.connect(_schedule_refresh)
 
 	show_empty()
 
@@ -120,12 +121,13 @@ func show_mission_result(team_name: String, ev_title: String, result: MissionRes
 	view.populate_mission_result(team_name, ev_title, result, show_empty)
 
 
-func show_travel_confirmation(team_name: String, ev_title: String, plan: Dictionary) -> void:
+func show_travel_confirmation(team_name: String, ev_title: String, plan: Dictionary,
+		title: String = "Team Deployed") -> void:
 	_view = _View.RESULT
 	_clear()
 	var view: VBoxContainer = DetailViewResult.new()
 	add_child(view)
-	view.populate_travel_confirmation(team_name, ev_title, plan, show_empty)
+	view.populate_travel_confirmation(team_name, ev_title, plan, show_empty, title)
 
 
 func show_empty() -> void:

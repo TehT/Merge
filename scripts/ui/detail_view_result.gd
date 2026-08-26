@@ -69,8 +69,9 @@ func populate_mission_result(team_name: String, ev_title: String, result: Missio
 	_add_close_button(on_close)
 
 
-func populate_travel_confirmation(team_name: String, ev_title: String, plan: Dictionary, on_close: Callable) -> void:
-	_add_title("Team Deployed")
+func populate_travel_confirmation(team_name: String, ev_title: String, plan: Dictionary,
+		on_close: Callable, title: String = "Team Deployed") -> void:
+	_add_title(title)
 	_add_subtitle("%s  →  %s" % [team_name, ev_title], Color(0.55, 0.55, 0.6, 1.0))
 
 	add_child(HSeparator.new())

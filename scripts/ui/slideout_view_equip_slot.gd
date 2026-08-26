@@ -1,9 +1,14 @@
 extends "res://scripts/ui/slideout_view_base.gd"
 ## SlideoutViewEquipSlot — picker for one of an agent's equipment slots:
 ## shows what's currently equipped (with an Unequip option), then every
-## locker item for that slot_type with an Equip button, disabled and
-## annotated when the agent doesn't meet its requirements. Mirrors
-## SlideoutViewDeploy's "list of options with an action button" shape.
+## reachable item for that slot_type with an Equip button, disabled and
+## annotated when the agent doesn't meet its requirements. "Reachable" is
+## Global equipment (usable from anywhere) plus whatever's local to the
+## base the agent is actually at right now (TeamManager.get_agent_base())
+## — not other bases' local_equipment, and not anything at all if the
+## agent's team is away from every base (traveling, or on-site at a
+## mission). Mirrors SlideoutViewDeploy's "list of options with an action
+## button" shape.
 
 var _agent: AgentData
 var _slot_type: String
@@ -32,12 +37,20 @@ func populate(agent: AgentData, slot_type: String, on_close: Callable) -> void:
 
 	add_child(HSeparator.new())
 
-	var pool: Array[EquipmentData] = Game.base_manager.get_all_equipment().filter(
+	var current_base: BaseData = Game.team_manager.get_agent_base(agent.id)
+	var reachable: Array[EquipmentData] = Game.base_manager.global_equipment.duplicate()
+	if current_base != null:
+		reachable.append_array(current_base.local_equipment)
+	var pool: Array[EquipmentData] = reachable.filter(
 		func(item: EquipmentData) -> bool: return item.slot_type == slot_type)
 
 	if pool.is_empty():
 		var none_lbl := Label.new()
-		none_lbl.text = "No %s items in the locker." % slot_type.to_lower()
+		if current_base == null:
+			none_lbl.text = "%s is away from base — only Global equipment is reachable, and none is %s." % [
+				agent.agent_name, slot_type.to_lower()]
+		else:
+			none_lbl.text = "No %s items at %s (or Global)." % [slot_type.to_lower(), current_base.base_name]
 		none_lbl.add_theme_font_size_override("font_size", 12)
 		none_lbl.add_theme_color_override("font_color", Color(0.45, 0.45, 0.5, 1.0))
 		add_child(none_lbl)

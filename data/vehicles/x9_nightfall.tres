@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="VehicleData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/vehicle_data.gd" id="1_x9nightfall"]
+
+[resource]
+script = ExtResource("1_x9nightfall")
+vehicle_name = "X-9 'Nightfall'"
+role = 1
+description = "A black-budget hypersonic prototype, built for exactly one job: get a full team from one base to another before anyone notices they left. Base-to-base only — cargo space is razor thin, but it covers Berlin to New York in one hop, faster than anything else in the fleet.
+"
+speed_kmh = 7000.0
+max_range_km = 7000.0
+capacity = 5

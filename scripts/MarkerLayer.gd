@@ -1,6 +1,14 @@
 extends Node3D
+class_name MarkerLayer
 ## Holds all surface markers and resolves clicks to a selection.
 ## Should be a child of the Globe node so markers inherit planet rotation.
+## Referenced elsewhere via Game.marker_layer (registers itself in
+## _ready() — see game.gd), so any manager owning something with a
+## coordinate can call register_location()/unregister_location() directly
+## instead of MarkerLayer needing bespoke per-type logic (the old
+## _create_hq_marker() only ever placed a marker for the *primary* base,
+## silently missing every other one — register_location() is the fix, and
+## the generalization the location-marker system needed anyway).
 
 signal marker_selected(marker: SurfaceMarker)
 signal selection_cleared()
@@ -11,8 +19,10 @@ signal marker_unhovered(marker: SurfaceMarker)
 ## that event's details the same way clicking its map label does.
 signal event_marker_clicked(ev: EventData)
 
-## Fired when the HQ marker is clicked, so UI can open the base info panel.
-signal hq_marker_clicked()
+## Fired when a marker representing a base is clicked, carrying which
+## base's id, so UI can open that specific base's info panel (not always
+## the primary one, now that every base gets a marker).
+signal base_marker_clicked(base_id: String)
 
 ## Fired whenever an event marker is added/removed, so other views (e.g.
 ## GeoscapeController's detail quad) can mirror the same markers without
@@ -35,8 +45,10 @@ var selected_marker: SurfaceMarker = null
 var hovered_marker: SurfaceMarker = null
 var flatten: float = 0
 
-## event id -> its SurfaceMarker, for events placed via EventManager signals.
-var _event_markers: Dictionary = {}
+## location_id -> its SurfaceMarker. The generic registry behind
+## register_location()/unregister_location() — bases and events both go
+## through this now, and any future location-bearing concept would too.
+var _location_markers: Dictionary = {}
 
 
 ## Mirrors GeoscapeController's flatten onto every marker so pins jump to the
@@ -64,6 +76,8 @@ const DEFAULT_SITES := [
 
 
 func _ready() -> void:
+	Game.marker_layer = self
+
 	_controller = _find_controller()
 	if _controller:
 		if _controller.has_signal("globe_clicked"):
@@ -74,7 +88,14 @@ func _ready() -> void:
 	for site in DEFAULT_SITES:
 		add_site(site["name"], site["lat"], site["lon"])
 
-	_create_hq_marker()
+	# Every base gets a marker, not just the primary one (the old
+	# _create_hq_marker() only ever placed one for get_primary_base(),
+	# silently missing every other base).
+	for base: BaseData in Game.base_manager.bases:
+		var marker := register_location(base.id, base.base_name, base.location,
+				Color(0.95, 0.9, 0.6), {"base_id": base.id})
+		marker.marker_size = 0.09
+		marker.is_base = true
 
 	# The whole scene tree (including Game.event_manager) already exists by the
 	# time any node's _ready() runs, so this is always safe regardless of
@@ -84,15 +105,34 @@ func _ready() -> void:
 	Game.event_manager.event_resolved.connect(_on_event_resolved)
 
 
-## Permanent diamond icon at HQ's location. Not tied to the event
-## lifecycle, so it's created once here rather than via add/remove signals.
-func _create_hq_marker() -> void:
-	var hq := Game.base_manager.get_primary_base()
-	var hq_marker := add_site(hq.base_name, hq.location.y, hq.location.x)
-	hq_marker.marker_size = 0.09
-	hq_marker.is_base = true
-	hq_marker.set_color(Color(0.95, 0.9, 0.6))
-	hq_marker.data = {"is_hq": true}
+## The generic path any manager uses to place a marker for something with
+## a coordinate — a base, an event, or any future location-bearing
+## concept — instead of MarkerLayer needing bespoke per-type logic.
+## location_id must be unique across every registered location, not just
+## this type (bases and events already use their own unique .id, so no
+## prefixing is needed today). Re-registering an id already in use
+## replaces its marker rather than stacking a second one on top.
+func register_location(location_id: String, display_name: String, location: Vector2,
+		color: Color = Color(0.8, 0.8, 0.8), data: Dictionary = {}) -> SurfaceMarker:
+	if _location_markers.has(location_id):
+		unregister_location(location_id)
+	var marker := add_site(display_name, location.y, location.x)
+	marker.set_color(color)
+	marker.data = data
+	_location_markers[location_id] = marker
+	return marker
+
+
+func unregister_location(location_id: String) -> void:
+	var marker: SurfaceMarker = _location_markers.get(location_id)
+	if marker == null:
+		return
+	remove_site(marker)
+	_location_markers.erase(location_id)
+
+
+func get_location_marker(location_id: String) -> SurfaceMarker:
+	return _location_markers.get(location_id)
 
 
 ## Places a marker for a newly spawned event, colored by urgency. Escalation
@@ -104,10 +144,7 @@ func _on_event_spawned(event: EventData) -> void:
 		return  # no real-world location resolved (e.g. GeoData unavailable)
 
 	var color := event.get_urgency_color()
-	var marker := add_site(event.title, event.geo_coordinates.y, event.geo_coordinates.x)
-	marker.data = {"event_id": event.id}
-	marker.set_color(color)
-	_event_markers[event.id] = marker
+	register_location(event.id, event.title, event.geo_coordinates, color, {"event_id": event.id})
 	event_marker_added.emit(event.id, event.geo_coordinates.y, event.geo_coordinates.x, color)
 
 
@@ -120,15 +157,13 @@ func _on_event_resolved(event: EventData, _team_name: String, _result: MissionRe
 
 
 func get_event_marker(event_id: String) -> SurfaceMarker:
-	return _event_markers.get(event_id)
+	return get_location_marker(event_id)
 
 
 func _remove_event_marker(event_id: String) -> void:
-	var marker: SurfaceMarker = _event_markers.get(event_id)
-	if marker == null:
+	if not _location_markers.has(event_id):
 		return
-	remove_site(marker)
-	_event_markers.erase(event_id)
+	unregister_location(event_id)
 	event_marker_removed.emit(event_id)
 
 
@@ -187,8 +222,8 @@ func _on_globe_clicked(screen_pos: Vector2) -> void:
 		var ev: EventData = Game.event_manager.get_event_by_id(hit.data["event_id"])
 		if ev:
 			event_marker_clicked.emit(ev)
-	elif hit and hit.data.has("is_hq"):
-		hq_marker_clicked.emit()
+	elif hit and hit.data.has("base_id"):
+		base_marker_clicked.emit(hit.data["base_id"])
 
 
 func _set_hovered(marker: SurfaceMarker) -> void:

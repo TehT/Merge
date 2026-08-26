@@ -45,7 +45,8 @@ func _ready() -> void:
 	%BasesList.base_selected.connect(_on_base_selected)
 	%EventMapLabels.event_label_clicked.connect(_on_event_selected)
 	%MarkerLayer.event_marker_clicked.connect(_on_event_selected)
-	%MarkerLayer.hq_marker_clicked.connect(_on_hq_selected)
+	%MarkerLayer.base_marker_clicked.connect(func(base_id: String) -> void:
+		_on_base_selected(Game.base_manager.get_base_by_id(base_id)))
 
 	Game.slideout_panel.visibility_changed.connect(_on_left_slideout_visibility_changed)
 	Game.right_slideout_panel.visibility_changed.connect(_on_right_slideout_visibility_changed)
@@ -61,11 +62,6 @@ func _on_agent_selected(agent: AgentData) -> void:
 
 func _on_team_selected(team: TeamData) -> void:
 	Game.detail_sidebar.show_team(team)
-	open_left()
-
-
-func _on_hq_selected() -> void:
-	Game.detail_sidebar.show_hq()
 	open_left()
 
 
