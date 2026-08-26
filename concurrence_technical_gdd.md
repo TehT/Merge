@@ -3,7 +3,7 @@
 **Companion to `concurrence_gdd.md`.** That document owns the *vision*: premise, narrative arc, act structure, design principles. This document owns the *implementation*: what actually exists in the codebase today, how it fits together, the conventions to follow, and what to build next.
 
 **Engine:** Godot 4.7 (stable), GDScript, Forward+
-**Status as of this document:** Milestone 1 (core loop) is functionally complete and playable via UI. Well beyond original scope: travel now has three legs (travel / on-site mission / travel home), resolution is a swappable Strategy Pattern, skills and equipment are both fully data-driven Resource systems, agents are procedurally generated, and a `BaseManager` owns bases/vehicles/equipment ahead of real multi-base play.
+**Status as of this document:** Milestone 1 (core loop) is functionally complete and playable via UI. Well beyond original scope: travel now has three legs (travel / on-site mission / travel home), missions are built from an ordered sequence of **phases** (not one flat check) with two swappable resolution strategies and a real mid-mission player-choice pause, skills and equipment are both fully data-driven Resource systems, agents are procedurally generated, a `BaseManager` owns bases/vehicles/equipment ahead of real multi-base play, and a running **event log** records what's happened all session.
 
 > ⚠️ **The original GDD is partly out of date.** See [§9 Divergences](#9-divergences-from-the-original-gdd) before treating it as spec.
 
@@ -30,7 +30,9 @@
 
 ### The manager pattern, and `Game` (the one autoload)
 
-Every manager is still a plain `Node` parented directly under `Main` — **managers themselves are not autoloads.** The one exception is `Game` (`scripts/game.gd`), a thin **typed registry**, not a duplicate of any manager: it holds `var game_clock: GameClock`, `agent_manager`, `base_manager`, `team_manager`, `event_manager`, `resource_state`, `concealment_state`, `geo_data`, `detail_sidebar`, `slideout_panel` — nothing else. Each manager assigns itself into the matching `Game` field as the **first line of its own `_ready()`** (`Game.agent_manager = self`), so `Game.x` is only ever read after `x`'s own `_ready()` has run.
+Every manager is still a plain `Node` parented directly under `Main` — **managers themselves are not autoloads.** The one exception is `Game` (`scripts/game.gd` — note the lowercase; a stale git/disk case mismatch on this exact file was finally fixed this pass, see §8), a thin **typed registry**, not a duplicate of any manager: it holds `var game_clock: GameClock`, `agent_manager`, `base_manager`, `team_manager`, `event_manager`, `event_log`, `resource_state`, `concealment_state`, `geo_data`, `detail_sidebar`, `slideout_panel`, `mission_choice_dialog` — nothing else. Each manager assigns itself into the matching `Game` field as the **first line of its own `_ready()`** (`Game.agent_manager = self`), so `Game.x` is only ever read after `x`'s own `_ready()` has run.
+
+`EventLog` must be listed *after* `EventManager` and `TeamManager` as a `Main.tscn` sibling — it connects to their signals in its own `_ready()` and needs both already registered into `Game`.
 
 **Why this exists, replacing the earlier `%UniqueName` convention:** `%`-lookups resolve by walking a node's `owner` chain, which only works for nodes instantiated from a packed scene. Every dynamically-created UI view (`detail_view_*.gd`, `slideout_view_*.gd`, all built via `SomeControl.new()` + `add_child()`) never gets an `owner` assigned, so `%`-lookups from inside them silently fail. `Game.x` resolves by autoload identity instead, which works identically no matter how or where the calling code was created. `%UniqueName` still works fine from properly scene-owned scripts and is still used in a few places, but new code should prefer `Game.x`.
 
@@ -70,10 +72,21 @@ Consequences:
       └─────────────────────────────────────────┘
 
       ┌─────────────────────────────────────────┐
+      │  Mission phase layer                     │  the sole resolution path —
+      │  (scripts/data/mission_phases/,          │  every EventData.phases is
+      │  scripts/data/mission_check.gd,          │  a non-empty Array[MissionPhase],
+      │  scripts/managers/mission_phase_runner)  │  run in order by the runner
+      │  MissionPhase (base), SinglePhase,       │
+      │  ChoicePhase, MissionCheck,               │
+      │  MissionPhaseRunner, MissionPhaseResult  │
+      └────────────────┬────────────────────────┘
+                       │ each MissionCheck delegates to
+      ┌────────────────┴────────────────────────┐
       │  Resolution strategy layer               │  Strategy pattern — Resource-
       │  (scripts/managers/resolution/)          │  based, Inspector-swappable
-      │  MissionResolutionStrategy (base),       │
-      │  StatCheckResolutionStrategy (default),  │
+      │  MissionResolutionStrategy (base),       │  per MissionCheck (not per
+      │  StatCheckResolutionStrategy,             │  event — EventData no longer
+      │  TagBreadthResolutionStrategy,            │  holds one at all)
       │  MissionResolutionResult (contract)      │
       └─────────────────────────────────────────┘
 
@@ -86,7 +99,9 @@ Consequences:
 
 The **Handler layer** is new relative to earlier versions of this doc: as the data model grew (skills split from their computation, equipment added its own cross-cutting math), the "one big static resolver" pattern (`MissionResolver`) got imitated deliberately for each new concern (`SkillHandler` for skill aggregation, `EquipmentHandler` for equipment effects, `AgentGenerator`/`NameGenerator` for procedural content) rather than growing `MissionResolver` into a god-object. Each one is `RefCounted`, entirely static, no persistent state, no autoload registration — plain `class_name` scripts.
 
-The **resolution strategy layer** is also new: `EventManager` no longer calls `MissionResolver` directly. It holds a swappable `resolution_strategy: MissionResolutionStrategy` and calls `resolve(event, squad)` on it; today that's `StatCheckResolutionStrategy`, which internally *does* call `MissionResolver`. See §3.6 and §6.
+The **mission phase layer** and **resolution strategy layer** replaced what used to be a single `EventManager.resolution_strategy` field. `EventManager` no longer holds *any* strategy or calls one directly — it unconditionally calls `MissionPhaseRunner.resolve(event.phases, squad)` (a coroutine — see below), which runs each `MissionPhase` in order and asks each one's `MissionCheck` to resolve itself against *its own* `resolution_strategy`. `MissionResolver`'s shared math (`compute_rank_coverage`, `compute_team_suitability`, etc.) no longer takes an `EventData`/`MissionCheck` at all — it takes a plain requirements `Dictionary` (whatever `get_proficiency_requirements()` returns) plus an optional `active_tags`, so it works identically for a real `MissionCheck` resolving a mission and for the deploy screen's `EventData`-based match% preview. See §3.8 and §6.
+
+**Resolution is a coroutine end-to-end.** A `ChoicePhase`'s `PLAYER_CHOICE` trigger can suspend mid-mission to await a real player pick (via `MissionChoiceDialog` — see §3.8), so `ChoicePhase.resolve()` → `MissionPhaseRunner.resolve()` → both of `EventManager`'s resolve entry points are all `await`-chained. Nothing else in the game pauses while a choice is pending — `GameClock` keeps ticking, deliberately (nothing else in the game is turn-based either).
 
 ### Data flow principle
 
@@ -112,6 +127,7 @@ Main                          [GeoscapeController.gd]
 ├── %BaseManager               [base_manager.gd]         ← must precede TeamManager
 ├── %TeamManager               [team_manager.gd]
 ├── %EventManager              [event_manager.gd]
+├── %EventLog                  [event_log.gd]            ← must follow EventManager/TeamManager
 ├── WorldEnvironment
 ├── Globe                     MeshInstance3D + geoscape_material
 │   ├── %MarkerLayer          [MarkerLayer.gd]          event pins + HQ pin
@@ -125,6 +141,8 @@ Main                          [GeoscapeController.gd]
 │       ├── %SkillSlideout    [slideout_panel.gd]       secondary pop-out panel
 │       ├── LeftSidebar → LeftScroll → %DetailPanel  [detail_sidebar.gd]
 │       ├── LeftToggle
+│       ├── %EventLogToggle   sibling button, "☰" — opens the event log (SlideoutPanel)
+│       ├── %MissionChoiceDialog [mission_choice_dialog.gd]  full-screen modal, hidden by default
 │       └── RightSidebar → Tabs (TabContainer)
 │           ├── Squads → SquadScroll → %SquadList     [agent_tab.gd]
 │           │            + "+ New Squad" button (pinned outside scroll)
@@ -179,9 +197,10 @@ The old fixed 4-agent roster (Mara Okonkwo, Iris Vance, Desmond Ffrench, Kalinda
 
 `EventData` — spawned by `EventManager` from `spawn_templates: Array[EventData]`, an `@export` array **empty by default**, populated via the Inspector by dragging in `.tres` resources from `res://data/event_templates/` (7 exist on disk: the 6 spawnable types + `portal_breach` as escalation-only; as configured today only `magical_surge.tres` is actually wired into the live `spawn_templates` array — the rest exist but aren't in the active pool until someone drags them in). `spawn_random_event()` `duplicate(true)`s the chosen template rather than building one from scratch.
 
-- **Requirements are proficiency ranks** (`req_combat: int` 0–10, etc.), *not* raw scores. 0 = irrelevant.
-- **`tags: PackedStringArray`** (new) — an event's context tags, fed into `SkillHandler`'s tag-modifier system as `active_tags` during resolution. **`counter_tags`** (older field) is still present but still has no caller in the resolution path — see §10.
-- **`mission_duration_hours: float = 2.0`** (new) — how long a deployed team spends actively on-site working the event, once they arrive, before heading home. See §3.4 and §6 for the state machine this drives.
+- **`req_combat: int` (0–10) etc. are now a coarse, spawn-time/UI-facing summary only** — `EventManager.spawn_random_event()`'s difficulty scaling, escalation rank bumps, and the deploy screen's match% preview all read them, but **nothing in resolution does**. Every event resolves through `phases` instead (below); each phase's own `MissionCheck` carries the real req_*/target_*/tags a strategy actually reads.
+- **`target_*` (Target Values) and `tags`/`counter_tags` are gone from `EventData` entirely** — moved to `MissionCheck` (§3.8), the actual unit resolution strategies operate on. `get_target_values()`/`has_tag()` no longer exist on `EventData`.
+- **`phases: Array[MissionPhase]`** (new, mandatory) — every event resolves through this, run in order by `MissionPhaseRunner`. A simple, single-check mission is just a one-element array holding one `SinglePhase`. An empty array resolves nothing (logs a warning) — treat it as a content bug, not a valid state. See §3.8.
+- **`mission_duration_hours: float = 2.0`** — how long a deployed team spends actively on-site working the event, once they arrive, before heading home. See §3.4 and §6 for the state machine this drives.
 - **Status lifecycle:** `ACTIVE → DEPLOYED → RESOLVED_SUCCESS | RESOLVED_PARTIAL | RESOLVED_FAIL`, or `ACTIVE → EXPIRED`. Unchanged.
 - **`DEPLOYED` pauses the countdown** — unchanged.
 - **Escalation:** unchanged — on expiry, if `can_escalate`, spawns `escalates_to` at the same location with every non-zero requirement bumped by `escalation_rank_bump`.
@@ -262,6 +281,41 @@ Subclasses: `EffectStatBoost` (flat addition to one Proficiency's *score*), `Eff
 
 `BaseManager.get_primary_base()` / `get_all_vehicles()` / `get_all_equipment()` are **explicitly documented as pooling stand-ins** — every current caller treats "which base" as "all of them, indiscriminately," because nothing (no team, no agent) tracks a home base yet. Wiring real per-base availability is a distinct, not-yet-started task; adding a second base today would work data-wise but wouldn't change any behavior, since nothing filters by which base is "yours."
 
+### 3.8 Multi-Stage Missions, Alternate Resolution, and Player Choice (new)
+
+**`MissionCheck`** (`scripts/data/mission_check.gd`) is the phase-scoped analog of `EventData`'s old requirement/target/tag fields, and the actual unit every `MissionResolutionStrategy` resolves against: `req_*`/`target_*`/`tags`/`counter_tags`, a `check_name`, and its own `resolution_strategy` (defaults to `StatCheckResolutionStrategy`). `get_proficiency_requirements()`/`get_target_values()` live here now, not on `EventData`. `resolve(squad)` just calls `resolution_strategy.resolve(self, squad)` — no conversion step.
+
+**`MissionPhase`** (`scripts/data/mission_phases/mission_phase.gd`) is the Strategy-pattern base for one stage of a mission. `get_checks() -> Array[MissionCheck]` lets UI/preview code (requirement display, match% averaging) walk any phase without caring which concrete type it is.
+- **`SinglePhase`** — one `MissionCheck`, always runs.
+- **`ChoicePhase`** — picks one `MissionCheck` from `checks`, per `trigger`:
+  - `FAILURE` — a *conditional branch*, not a pick-among-alternatives mode: only activates if the immediately preceding phase's outcome was a failure. Skipped (silently, `MissionPhaseResult.ran = false`) otherwise.
+  - `RANDOM` — always activates, picks uniformly at random.
+  - `PLAYER_CHOICE` — always activates, pauses resolution and awaits a real player pick via `MissionChoiceDialog`. `player_choice_picker: Callable` is an injectable override (used for testing without a real UI/Signal round-trip; falls back to the dialog in normal play).
+
+**`MissionPhaseRunner`** (`scripts/managers/mission_phase_runner.gd`, static, a coroutine) runs an event's `phases` in order: threads the previous phase's outcome into the next (for `ChoicePhase.FAILURE`), threads the accumulated log-so-far into each phase (so the player-choice dialog can show "how the mission's gone"), and merges every phase's agent-status rolls **worst-status-wins** (KIA > Injured > Available — an agent hurt in an earlier phase can't come out "healed" by a later phase's independent roll). No fatigue modeling yet (deliberately deferred). The final outcome is whichever phase actually ran last.
+
+**Two resolution strategies now exist**, both taking `(check: MissionCheck, squad)`:
+- **`StatCheckResolutionStrategy`** — the original math (team rank/score coverage vs. `req_*`), unchanged in substance.
+- **`TagBreadthResolutionStrategy`** — pools skills by *tag* within a category rather than by category alone, rewarding a team that covers a category from several angles over one that stacks copies of the same angle. Two-pass: a **Modifier Pass** (a skill sharing a tag with `check.counter_tags` → effective rank 0; sharing a tag with `check.tags` → effective rank +1 — this is the first real use of `counter_tags` anywhere in resolution, via `MissionCheck` rather than the old inert `EventData.counter_tags`) and a **Redundancy Pass** (skills grouped by tag, sorted by rank, weighted so a lone top skill counts fully but redundant copies of the same rank increasingly don't — closed-form: 100%/50%/0% for a solo skill's 1st/2nd/3rd rank-tier, or `max(0, 180/n − 15)%` per head for an *n*-way tie, reproducing the spec'd 75%/45%/30% anchors at n=2/3/4). The pooled tag-weighted totals are compared against `target_*` (continuous), while `req_*` stays a separate hard prerequisite gate: a missing prerequisite multiplies the roll chance by `missing_prereq_penalty` (`@export`, default 0.75 — 0.5 played too harsh, a 95% shot dropping to ~40% off one missed prereq) per category missed, compounding.
+
+`MissionResolver.resolve_from_suitability()` — shared by both strategies — also now returns a human-readable trace (`MissionResolutionResult.log_lines`): rank/score coverage per category, the chance/roll/outcome line, per-agent roll lines. `EventManager` prints it under the one-line summary; `detail_view_result.gd` shows it in the Mission Report.
+
+**`MissionChoiceDialog`** (`scripts/ui/mission_choice_dialog.gd`, `Game.mission_choice_dialog`) — a full-screen modal (scrim + centered panel), hidden by default. `request_choice(phase, log_so_far)` populates it (phase name, the log so far, one clickable card per check showing name + rank pips) and `await`s its own private `choice_made` signal, returning the chosen `MissionCheck`. Nothing else pauses while it's up — see §1.
+
+**Deploy screen / event sheet previews**, now rebuilt around phases instead of `EventData`'s old flat fields:
+- `MissionResolver.compute_mission_suitability(phases, members)` — the deploy screen's match% — averages suitability per phase (a `ChoicePhase`'s own checks are averaged together first, since only one will actually run and which isn't known ahead of time), then averages across phases. A phase with no checks configured is skipped, not counted as 0.
+- `detail_view_event.gd`'s Requirements section is a **per-phase breakdown** — phase count in the header, a trigger note for `ChoicePhase` (`(random choice)`, `(if previous phase fails)`, `(player choice)`), and each check's own rank pips, labeled `Option: <name>` when a phase has more than one.
+
+### 3.9 Event Log (new)
+
+**`EventLog`** (`scripts/managers/event_log.gd`, `Game.event_log`) listens to `EventManager`/`TeamManager` signals and keeps a running, player-facing history: events spawning/expiring/escalating/resolving, teams departing/setting-out-for-home/arriving/returning (`team_departed` and `team_arrived` each cover two semantically different moments with the same signal signature — `EventLog` reads `team.travel_is_return` / whether `event_id` is empty at the moment the signal fires to tell them apart). Capped at 300 entries (`MAX_ENTRIES`).
+
+**`EventLogEntry`** (`scripts/managers/event_log_entry.gd`) — a local in-game timestamp (`day`/`hour`, straight from `GameClock.current_day`/`current_hour`, its actual whole-hour resolution) plus the entry text. `format_timestamp()` → `"Day 5, 14:00"`.
+
+**Ordering matters and was a real bug**: `EventManager._on_team_arrived()` used to call `begin_return_travel()` (which synchronously fires `team_departed` for the return leg) *before* emitting `event_resolved` — so the log showed "set out for home" ahead of "resolved," even though resolution happens first. Fixed by moving `event_resolved.emit()` + its prints ahead of the return-travel call.
+
+Shown via **`SlideoutViewEventLog`** (`scripts/ui/slideout_view_event_log.gd`), a new `SlideoutPanel` mode (`_Mode.EVENT_LOG`) opened by a small `☰` button (`EventLogToggle`) — a plain sibling under `UI/Root`, not nested inside `LeftToggle` (an earlier attempt to nest it so it'd auto-follow the sidebar's slide was reverted; it doesn't currently move when the sidebar opens/closes — flagged, not yet fixed, see §11).
+
 ---
 
 ## 4. File & Function Reference
@@ -290,14 +344,19 @@ Plain data now — see §3.1. `Proficiency` enum + `PROFICIENCY_NAMES/_KEYS/_COL
 | `get_primary_proficiency()` | Highest-scoring category key |
 | `can_equip(item) / equip(item) / unequip(slot_type)` | See §3.6 |
 | `get_type_name() / get_status_name() / is_available()` | Display + guards |
-| `compute_suitability(event)` | Solo-agent rank coverage via `MissionResolver`. Unused (dead code — nothing calls it) |
 
 #### `team_data.gd` → `class_name TeamData extends Resource`
 Constants `MIN_SIZE=3`, `MAX_SIZE=5`, `MAX_COHESION_BONUS=0.5`. Holds membership, cohesion, location, the travel-state block, and the newer on-mission state block (§3.4).
 `compute_effective_skills(members)` — level-weighted, cohesion-boosted score dict. **Still has no callers** — cohesion still has zero effect on mission outcomes (§10).
 
 #### `event_data.gd` → `class_name EventData extends Resource`
-See §3.3. Key methods: `setup()`, `set_proficiency_profile(6 ints)`, `get_proficiency_requirements()` → dict, `get_primary_proficiency()`, `get_total_difficulty()`, `get_urgency_color()`, `is_expired()`.
+See §3.3. Key methods: `setup()`, `set_proficiency_profile(6 ints)`, `get_proficiency_requirements()` → dict (now a coarse summary, not a resolution input), `get_primary_proficiency()`, `get_total_difficulty()`, `get_urgency_color()`, `is_expired()`. `phases: Array[MissionPhase]` is the sole resolution path (§3.8) — `get_target_values()`/`has_tag()`/`tags`/`counter_tags` no longer exist here, moved to `MissionCheck`.
+
+#### `mission_check.gd` → `class_name MissionCheck extends Resource`
+See §3.8. `req_*`, `target_*`, `tags`/`counter_tags`, `check_name`, `resolution_strategy`. `get_proficiency_requirements()`, `get_target_values()`, `resolve(squad)`.
+
+#### `scripts/data/mission_phases/`
+`mission_phase.gd` (base, `get_checks()`/`resolve(squad, previous_outcome, log_so_far)` — a coroutine, always call with `await`), `single_phase.gd`, `choice_phase.gd` (`Trigger` enum, `player_choice_picker`). See §3.8.
 
 #### `vehicle_data.gd` → `class_name VehicleData extends Resource`
 See §3.5. `compute_travel_hours(distance)`, `can_reach(distance)`, `can_carry(team_size)`, `get_mode_name()`, static `format_duration(hours)`.
@@ -350,17 +409,19 @@ See §3.7. `bases`, `global_equipment`, `get_primary_base()`, `get_all_vehicles(
 | `_process` | Checks travel-arrival **and** mission-ready every frame, sub-day precision |
 
 #### `event_manager.gd` — `%EventManager` / `Game.event_manager`
+No `resolution_strategy` field anymore — resolution is unconditionally `await MissionPhaseRunner.resolve(event.phases, squad)` (§3.8); both resolve entry points are coroutines.
+
 | Function | Purpose |
 |---|---|
-| `resolution_strategy: MissionResolutionStrategy` | **New** — Strategy pattern seam, live-default `StatCheckResolutionStrategy.new()` so the Inspector always shows a populated, expandable resource. Swappable at runtime or via the Inspector |
-| `spawn_templates` / `escalation_templates: Array[EventData]` | **New** — Inspector-populated pools (empty by default; see §3.3) replacing the old hardcoded template consts |
+| `spawn_templates` / `escalation_templates: Array[EventData]` | Inspector-populated pools (empty by default; see §3.3) |
 | `_on_day_advanced` | `magic_intensity += 0.02`; tick events; maybe spawn |
 | `spawn_random_event(template?)` | `duplicate(true)`s the chosen template `EventData`, scales reqs, places at a real city |
 | `deploy_team(event_id, team_id)` | Marks event DEPLOYED, delegates to `begin_travel` |
-| `_on_team_arrived(team_id, event_id)` | Calls `resolution_strategy.resolve()`, backfills any missing `agent_results` (see below), stashes outcomes as pending, starts the return trip |
-| `_backfill_agent_results(members, result)` | **New** — fills in AVAILABLE for any squad member a strategy's `agent_results` left out, so a strategy that doesn't mention an agent can't strand them DEPLOYED forever. No status change means they came home safe |
+| `_on_team_arrived(team_id, event_id)` | `await MissionPhaseRunner.resolve(...)`, backfills any missing `agent_results`, **emits `event_resolved` before calling `begin_return_travel()`** (fixed ordering bug — see §3.9), stashes outcomes as pending, starts the return trip |
+| `_backfill_agent_results(members, result)` | Fills in AVAILABLE for any squad member a strategy's `agent_results` left out, so a strategy that doesn't mention an agent can't strand them DEPLOYED forever. No status change means they came home safe |
 | `_apply_resolution(event, result)` | Rewards / concealment / final status |
-| `resolve_event_solo(event_id, agent_id)` | Legacy instant path — unused by UI, applies statuses immediately, also backfilled |
+| `_print_resolution_log(result)` | Prints `result.log_lines` under the one-line summary (§3.8) |
+| `resolve_event_solo(event_id, agent_id)` | Legacy instant path (also a coroutine now) — unused by UI, applies statuses immediately, also backfilled |
 
 #### `skill_handler.gd` → `class_name SkillHandler extends RefCounted`
 See §3.1. `RANK_THRESHOLDS`, `tag_modifiers`, `compute_effective_rank()`, `compute_proficiency_rank(skills, active_tags?)`, `is_countered_by()`, `instantiate(base, rank)`, `get_skills_for_proficiency(prof)`, `empty_proficiency_dict()`/`empty_rank_dict()`.
@@ -369,13 +430,18 @@ See §3.1. `RANK_THRESHOLDS`, `tag_modifiers`, `compute_effective_rank()`, `comp
 See §3.6.
 
 #### `mission_resolver.gd` → `class_name MissionResolver extends RefCounted`
+**Decoupled from `EventData`/`MissionCheck` this pass** — every function below takes a plain requirements `Dictionary` (`get_proficiency_requirements()`'s shape), not either concrete type, so the same math serves real resolution (against a `MissionCheck`) and UI previews (against an `EventData`) alike.
+
 | Function | Purpose |
 |---|---|
-| `compute_rank_coverage(ranks, event)` | Mean of `clamp(rank / required_rank, 0, 2)` across required proficiencies |
-| `compute_team_ranks(members, active_tags?)` | **Changed — "teamwork" pooling, marked experimental in code.** Every member's *effective* skills (own + equipment-granted/modified) are pooled into one shared pile per category *before* rank aggregation, instead of each member's rank being computed independently and the team taking the best. Two agents with one rank-2 skill each can jointly reach rank 3. Each member's equipped flat-rank effects apply on top afterward. Reduces to a solo agent's own ranks for a 1-member team |
-| `compute_team_scores(members)` | New — simple per-member sum (score is linear, no threshold quirks) |
-| `compute_score_coverage(team_scores, event)` | New — score-based counterpart to rank coverage, comparing against `req × RANK_SCALE` |
-| `compute_team_suitability(event, members)` | **Changed** — `lerp(rank_coverage, score_coverage, SCORE_WEIGHT=0.2) + synergy_bonus(stub, 0.0)`. Score is a smaller-weighted continuous nudge so equipment bonuses too small to cross a rank threshold still move suitability |
+| `compute_rank_coverage(ranks, reqs)` | Mean of `clamp(rank / required_rank, 0, 2)` across required proficiencies |
+| `compute_team_ranks(members, active_tags?)` | "teamwork" pooling, marked experimental in code. Every member's *effective* skills (own + equipment-granted/modified) are pooled into one shared pile per category *before* rank aggregation, instead of each member's rank being computed independently and the team taking the best. Two agents with one rank-2 skill each can jointly reach rank 3. Each member's equipped flat-rank effects apply on top afterward. Reduces to a solo agent's own ranks for a 1-member team |
+| `compute_team_scores(members)` | Simple per-member sum (score is linear, no threshold quirks) |
+| `compute_score_coverage(team_scores, reqs)` | Score-based counterpart to rank coverage, comparing against `req × RANK_SCALE` |
+| `compute_team_suitability(reqs, members, active_tags?)` | `lerp(rank_coverage, score_coverage, SCORE_WEIGHT=0.2) + synergy_bonus(stub, 0.0)`. Score is a smaller-weighted continuous nudge so equipment bonuses too small to cross a rank threshold still move suitability |
+| `compute_value_coverage(values, targets, reqs)` | Continuous counterpart to rank coverage — `TagBreadthResolutionStrategy`'s pooled tag-weighted totals vs. `target_*`, gated by `reqs` still being >0 |
+| `compute_mission_suitability(phases, members)` | **New** — the deploy screen's match%, averaged across an event's phases (§3.8) |
+| `resolve_from_suitability(suitability, squad, log_lines?, chance_multiplier?)` | **New** — turns a suitability float into the full roll/outcome/injury result, shared by both resolution strategies; also builds `MissionResolutionResult.log_lines` (§3.8) |
 
 #### `agent_generator.gd` → `class_name AgentGenerator extends RefCounted` (new)
 See §3.2. `Archetype` enum, `generate_specialist()`, `generate_generalist()`, `generate_random_specialist()`, `generate()`.
@@ -383,10 +449,21 @@ See §3.2. `Archetype` enum, `generate_specialist()`, `generate_generalist()`, `
 #### `name_generator.gd` → `class_name NameGenerator extends RefCounted` (new)
 See §3.2. `FIRST_NAMES`/`LAST_NAMES` (50 each), `generate_name()`.
 
-#### `scripts/managers/resolution/` (new — the Strategy pattern)
-- `mission_resolution_strategy.gd` → `class_name MissionResolutionStrategy extends Resource` — base, `resolve(event, squad) -> MissionResolutionResult`.
-- `stat_check_resolution_strategy.gd` → `class_name StatCheckResolutionStrategy extends MissionResolutionStrategy` — the original math, moved here unchanged: `chance = clamp(0.3 + suitability*0.4, 0.05, 0.95)`; roll ≤ chance×0.6 → success, ≤ chance → partial, else failure; injury 5%/15%/`lerp(15%,50%,badness)`; KIA = injury × 0.2.
-- `mission_resolution_result.gd` → `class_name MissionResolutionResult extends RefCounted` — `Outcome` enum (SUCCESS/PARTIAL/FAILURE), `roll`, `chance`, `team_suitability`, `agent_results: Dictionary`. The contract every strategy must fill in and every caller (EventManager, UI) reads — see §6 for exactly what's handed to `resolve()` and what isn't (no `TeamData`, no separate active-tags argument — a strategy derives context from `event.tags` itself).
+#### `scripts/managers/resolution/` (the Strategy pattern — now resolves against `MissionCheck`, not `EventData`)
+- `mission_resolution_strategy.gd` → `class_name MissionResolutionStrategy extends Resource` — base, `resolve(check: MissionCheck, squad) -> MissionResolutionResult`.
+- `stat_check_resolution_strategy.gd` → `class_name StatCheckResolutionStrategy extends MissionResolutionStrategy` — the original math: `chance = clamp(0.3 + suitability*0.4, 0.05, 0.95)`; roll ≤ chance×0.6 → success, ≤ chance → partial, else failure; injury 5%/15%/`lerp(15%,50%,badness)`; KIA = injury × 0.2. `MissionCheck`'s default.
+- `tag_breadth_resolution_strategy.gd` → `class_name TagBreadthResolutionStrategy extends MissionResolutionStrategy` — **new alternate strategy**, see §3.8. `@export var missing_prereq_penalty: float = 0.75`.
+- `mission_resolution_result.gd` → `class_name MissionResolutionResult extends RefCounted` — `Outcome` enum (SUCCESS/PARTIAL/FAILURE), `roll`, `chance`, `team_suitability`, `agent_results: Dictionary`, `log_lines: PackedStringArray` (new — human-readable resolution trace, §3.8). The contract every strategy must fill in and every caller (EventManager, UI) reads.
+- `mission_phase_result.gd` → `class_name MissionPhaseResult extends RefCounted` — what one `MissionPhase.resolve()` hands `MissionPhaseRunner`: `ran`, `outcome`, `agent_results`, `log_lines`. See §3.8.
+
+#### `mission_phase_runner.gd` → `class_name MissionPhaseRunner extends RefCounted`
+Static, a coroutine (`await` it). `resolve(phases, squad) -> MissionResolutionResult`. See §3.8.
+
+#### `event_log.gd` → `class_name EventLog extends Node` — `%EventLog` / `Game.event_log`
+See §3.9. `entries: Array[EventLogEntry]`, `signal entry_added(entry)`.
+
+#### `event_log_entry.gd` → `class_name EventLogEntry extends RefCounted`
+`day`, `hour`, `text`, `format_timestamp()`. See §3.9.
 
 ---
 
@@ -406,13 +483,14 @@ Unchanged from the previous version of this doc — `GeoscapeController.gd`, `Ge
 | `events_tab.gd` | `%EventList` | Active events sorted by urgency then time |
 | `equipment_tab.gd` | `%EquipmentList` (new) | Right-sidebar equipment locker list — see §3.6 |
 | `detail_sidebar.gd` | `%DetailPanel` | Left panel loader — `_View` enum (`EMPTY, AGENT, TEAM, EVENT, RESULT, HQ`) |
-| `slideout_panel.gd` | `%SkillSlideout` | Pop-out loader — `_Mode` enum now `PROFICIENCY, DEPLOY, VEHICLE, EQUIPMENT_INFO, EQUIP_SLOT` |
+| `slideout_panel.gd` | `%SkillSlideout` | Pop-out loader — `_Mode` enum now `PROFICIENCY, DEPLOY, VEHICLE, EQUIPMENT_INFO, EQUIP_SLOT, EVENT_LOG` |
 | `event_map_labels.gd` | `%EventMapLabels` | Clickable title chips above each event pin |
+| `mission_choice_dialog.gd` | `%MissionChoiceDialog` / `Game.mission_choice_dialog` | Full-screen player-choice modal (§3.8) |
 
 **Detail views** (`extends "res://scripts/ui/detail_view_base.gd"` by path, no `class_name`):
 - `detail_view_agent.gd` — proficiency rank pips **and now the raw score number** (clickable rows → slideout), a new **Equipment** section (3 clickable slots → equip picker), condition, team, supernatural.
 - `detail_view_team.gd` — editable name, cohesion, location — now with three states (at base / en route / **on mission**, new), team proficiency ranks, members.
-- `detail_view_event.gd` — unchanged.
+- `detail_view_event.gd` — Requirements section is now a **per-phase breakdown** (phase count, trigger notes, per-option rank pips), not a flat list from `EventData`'s old top-level fields; also a "Phases: N" info row. See §3.8.
 - `detail_view_hq.gd` — vehicles (now the primary base's, via `Game.base_manager`), squads (now with an **on mission** state too), **base-local equipment** (was a "Coming soon" placeholder, now real — clickable rows → info slideout), Base Upgrades still a placeholder.
 - `detail_view_result.gd` — unchanged.
 
@@ -422,6 +500,7 @@ Unchanged from the previous version of this doc — `GeoscapeController.gd`, `Ge
 - `slideout_view_vehicle.gd` — unchanged.
 - `slideout_view_equipment.gd` (new) — read-only item info card (slot, description, requirements, effects, each with `get_description()`).
 - `slideout_view_equip_slot.gd` (new) — the agent-sheet equip/unequip picker.
+- `slideout_view_event_log.gd` (new) — the event log panel (§3.9), newest entry first, live-refreshing.
 
 #### `scripts/debug/debug_driver.gd`
 Unchanged keys: `1` spawn event · `2` list events · `3` deploy first team to most urgent · `4`/`5` advance 1/7 days · `6` toggle pause · `7` roster · `8` resources · `9` full status · `0` team status · `T` train first team.
@@ -447,20 +526,29 @@ AgentManager       roster_changed / agent_status_changed ──► SquadList, De
 TeamManager        team_created / team_renamed / membership_changed /
                    cohesion_changed / training_started / training_completed
                                                     ──► SquadList, DetailPanel
-                   team_departed(team_id)           ──► DetailPanel, TravelPathLayer
+                   team_departed(team_id)           ──► DetailPanel, TravelPathLayer, EventLog
+                     (fires for BOTH the outbound leg and the return leg — EventLog
+                      reads team.travel_is_return, already set before either emit,
+                      to log "departed for X" vs. "set out for home, to X")
                    team_arrived(team_id, event_id)  ──► EventManager._on_team_arrived  ★
-                                                         DetailPanel, TravelPathLayer
+                                                         DetailPanel, TravelPathLayer, EventLog
                      (now fires after mission_duration_hours elapses on-site,
-                      not on physical arrival — see §3.4/§6)
+                      not on physical arrival — see §3.4/§6; event_id == "" means
+                      "just a return, nothing to resolve" — EventLog logs "returned to X"
+                      instead of "arrived at X" for that case)
 
-EventManager       event_spawned  ──► MarkerLayer, EventMapLabels, EventsTab
-                   event_expired  ──► MarkerLayer, EventMapLabels, EventsTab
+EventManager       event_spawned  ──► MarkerLayer, EventMapLabels, EventsTab, EventLog
+                   event_expired  ──► MarkerLayer, EventMapLabels, EventsTab, EventLog
                    event_resolved(event, team_name, result: MissionResolutionResult)
-                                  ──► MarkerLayer, EventMapLabels, EventsTab,
+                                  ──► MarkerLayer, EventMapLabels, EventsTab, EventLog,
                                       DetailPanel._on_mission_resolved (auto mission report)
                      (team_name is now its own signal parameter, not smuggled into the
-                      result dict; result is a typed MissionResolutionResult, not a Dictionary)
-                   event_escalated
+                      result dict; result is a typed MissionResolutionResult, not a Dictionary.
+                      Emitted BEFORE _on_team_arrived() calls begin_return_travel() — see §3.9
+                      for the ordering bug this fixes)
+                   event_escalated ──► EventLog
+
+EventLog           entry_added(entry: EventLogEntry) ──► SlideoutViewEventLog (live refresh)
 
 MarkerLayer        event_marker_clicked(ev) ──► RootUI._on_event_selected
                    hq_marker_clicked()      ──► RootUI._on_hq_selected
@@ -505,8 +593,9 @@ GameClock accumulates real seconds → seconds_per_hour elapsed → hour_advance
 2. INSPECT     Click through to DetailPanel EVENT view (unchanged).
 
 3. DISPATCH    "Deploy Team ›" → SkillSlideout DEPLOY mode. Per squad:
-                 • match % — now MissionResolver.compute_team_suitability(),
-                   a blend of rank coverage and score coverage (§3.6/§4)
+                 • match % — MissionResolver.compute_mission_suitability(),
+                   averaged across the event's phases (§3.8), each itself a
+                   blend of rank coverage and score coverage
                  • members available, distance, travel time, vehicle
                    (now sourced from Game.base_manager.get_all_vehicles())
                A team already is_on_mission elsewhere shows that status
@@ -521,19 +610,24 @@ GameClock accumulates real seconds → seconds_per_hour elapsed → hour_advance
                deploy picker) instead of misleadingly showing "at base".
 
 6. RESOLVE     Once mission_ready_day is reached, team_arrived fires (same signal
-               as before, just later) → EventManager._on_team_arrived:
-                 • resolution_strategy.resolve(event, squad) — today
-                   StatCheckResolutionStrategy: suitability → chance →
-                   roll buckets outcome → per-agent injury/KIA rolls
-                 • _backfill_agent_results() — any squad member the strategy
-                   didn't mention defaults to AVAILABLE (safety net, not a
+               as before, just later) → EventManager._on_team_arrived (a coroutine):
+                 • await MissionPhaseRunner.resolve(event.phases, squad) — runs
+                   every phase in order (§3.8); if a ChoicePhase's trigger is
+                   PLAYER_CHOICE, resolution SUSPENDS here until the player
+                   picks in MissionChoiceDialog. Everything else keeps running
+                   meanwhile (GameClock isn't paused for this).
+                 • _backfill_agent_results() — any squad member no phase
+                   mentioned defaults to AVAILABLE (safety net, not a
                    silent-forever-DEPLOYED bug)
                  • rewards / concealment applied, event status set
                  • cohesion +8
+                 • event_resolved emitted + logged (EventLog, §3.9) — BEFORE
+                   the team is sent home, so the log reads in the right order
                  • agent outcomes stashed in pending_agent_results ← NOT
                    applied yet
                  • begin_return_travel()
-               DetailPanel auto-pops the Mission Report.
+               DetailPanel auto-pops the Mission Report (now includes the
+               resolution trace — result.log_lines, §3.8).
 
 7. RETURN      Arrival home → _complete_travel() applies pending outcomes:
                Available / Injured / KIA (KIA = erased from roster, permanently).
@@ -559,6 +653,8 @@ One addition:
 
 16. **New `class_name` scripts need cache registration for headless verification the same way as always** (see §8 gotcha #1) — this project added a *lot* of new `class_name` scripts this pass (every equipment class, `BaseData`/`BaseManager`, `AgentGenerator`/`NameGenerator`, the whole resolution-strategy family). If a headless run reports "Identifier not found" for a class you know exists, check the cache first before assuming a real bug.
 
+18. **A function that ever `await`s anything is a coroutine for every caller, forever** — `ChoicePhase.resolve()` → `MissionPhaseRunner.resolve()` → `EventManager`'s two entry points are now all `await`-chained because of one `PLAYER_CHOICE` branch three calls deep. Call with `await` even on a call that resolves synchronously in practice (no real suspension happens unless the awaited thing is an actual `Signal` or another coroutine that itself suspends) — the `await` keyword itself is free when nothing actually yields.
+
 ### Verification
 
 Unchanged commands and expected output shape — `--headless --path . --quit`, never truncate the output. One new environment-specific caveat worth recording:
@@ -575,7 +671,10 @@ All 14 entries from the previous version of this document still apply unchanged.
 |---|---|---|
 | 15 | **`Resource.duplicate()` doesn't reliably isolate `PackedStringArray` export fields from copy-on-write sharing.** Mutating a `var t := dup.some_packed_array; t.append(x); dup.some_packed_array = t` pattern can still mutate the *original* Resource's array, even though `dup` and the original are genuinely different instances (confirmed: a plain `int` field duplicates and isolates correctly; a `PackedStringArray` field did not, in this Godot 4.7 build). | Build the new array from scratch (`PackedStringArray()` + append each element read from the *original*) instead of deriving it from a `.duplicate()`d property. See `EffectModifySkill.apply_to_skills()`. |
 | 16 | **`%`-lookups fail from any dynamically-created node** (`Control.new()` + `add_child()`), because `add_child()` alone never assigns `owner`, and `%` resolves by walking the `owner` chain. | Use the `Game` autoload registry (§1) instead for anything a dynamically-built view needs to reach. |
-| 17 | **Godot autoloads aren't resolvable as bare identifiers from a standalone `--script` `SceneTree` run** — `Identifier not found: Game` even though the project's `[autoload]` entry is correct and the game runs fine normally. | Use `get_tree().get_root().get_node("Game")` in headless test scripts instead of the bare `Game` identifier — though see gotcha above (#17 in §7) about broader instability testing manager classes this way. |
+| 17 | **Godot autoloads aren't resolvable as bare identifiers from a standalone `--script` `SceneTree` run** — `Identifier not found: Game` even though the project's `[autoload]` entry is correct and the game runs fine normally. **This applies even if the reference is in a branch that never executes** — the compiler resolves every identifier in a script at load time, so a production file that references `Game` anywhere at all (e.g. `ChoicePhase._pick_check()`'s fallback to `Game.mission_choice_dialog`, only reached when no picker is injected) can't be `--script`-tested in isolation even with a test that never takes that branch. Worked around by temporarily appending test code to an existing autoload-adjacent manager's own `_ready()` (where `Game` is genuinely available) and running the *real* `--quit` boot instead, then reverting the test code afterward. |
+| 18 | **GDScript lambda closures capture outer local variables by VALUE, not by reference** — `var n := 0; var f := func(): n += 1; f.call(); print(n)` still prints `0`. This bit ad-hoc test code twice this pass (a counter meant to track how many times an injected callback fired, silently staying at its initial value). Reference types (`Array`, `Dictionary`, `Object`) don't have this problem — `results.append(x)` inside a lambda *does* mutate the outer `Array`, since the "copy" is a copy of the reference. For anything that needs a lambda to report back a scalar, use a small `RefCounted` tracker object with real fields (and a bound-method `Callable`) instead. |
+| 19 | **A ternary between two array literals doesn't preserve static `Array[T]` typing** — `func f() -> Array[MissionCheck]: return [x] if x != null else []` compiles, but the caller's `var y := f()` throws `Trying to assign an array of type "Array" to a variable of type "Array[MissionCheck]"` at runtime, because the ternary's result is a plain untyped `Array`, not coerced to match the declared return type. Fix: build the typed array explicitly (`var result: Array[MissionCheck] = []; if x != null: result.append(x); return result`) instead of a ternary between literals. |
+| 20 | **`core.ignorecase` (Windows default) lets git's tracked path casing silently diverge from the actual on-disk filename** — this repo's `scripts/game.gd` was tracked by git in lowercase (matching every other file's snake_case convention and the GDD's own references to it) while the file on disk had somehow become `Game.gd`, which Godot warned about on every single boot ("Case mismatch... will not open when exported to other case-sensitive platforms") without ever actually breaking anything on Windows. Fixed with a two-step `git mv` through a temporary name (a same-target-different-case `git mv` is a no-op on a case-insensitive filesystem) to force git's index back in sync with the intended casing. Worth checking for on any file whose on-disk name doesn't match what's referenced elsewhere, especially after any rename done outside of git. |
 
 ---
 
@@ -590,6 +689,8 @@ All entries from the previous version still hold, plus:
 | (not mentioned) | **Equipment is a real, composable system** — requirements and effects assembled from independent Resources in the Inspector, not a design gap |
 | (not mentioned) | **Missions take real time on-site**, not just travel time — a third leg between arrival and resolution |
 | No mention of vehicles/bases | HQ + a vehicle fleet exist, and are now owned by a `BaseManager` designed (but not yet used) for multiple bases |
+| (not mentioned) | **A mission is a sequence of phases, not one check** — travel + infiltration + retrieval-style structure, with a second alternate resolution math (tag-breadth pooling) and a real mid-mission player choice, none of which the original GDD anticipates at all |
+| (not mentioned) | **A running event log** records what's happened all session — not part of the original design |
 
 Milestone 1 checklist unchanged from the previous version — still substantially complete, same items checked.
 
@@ -598,10 +699,10 @@ Milestone 1 checklist unchanged from the previous version — still substantiall
 ## 10. Known Gaps & Tech Debt
 
 **Dead or orphaned code**
-- `TeamData.compute_effective_skills()` — still no callers. **Cohesion still has no effect on mission outcomes**, despite the "teamwork" pooling experiment landing in `MissionResolver` — that's a different mechanic (skill pooling across teammates), not cohesion. Still the highest-value cleanup/wiring task.
-- `AgentData.get_effective_scores(counter_tags)` and `SkillHandler.is_countered_by()` — still no callers in the resolution path. **`EventData.counter_tags` is therefore still entirely inert** — note this is now a *different* mechanism from the newer, working `SkillTagModifier`/`tags` system (§3.1), which achieves a related but not identical effect (rank shifts, not binary negation) and *is* wired in.
+- `TeamData.compute_effective_skills()` — still no callers. **Cohesion still has no effect on mission outcomes**, despite two separate pooling mechanics (`MissionResolver`'s "teamwork" pooling, `TagBreadthResolutionStrategy`'s redundancy pass) landing since. Still the highest-value cleanup/wiring task, unchanged pass over pass.
+- `AgentData.get_effective_scores(counter_tags)` and `SkillHandler.is_countered_by()` — still no callers from `StatCheckResolutionStrategy`. **`counter_tags` is no longer uniformly inert, though** — it moved from `EventData` to `MissionCheck` this pass, and `TagBreadthResolutionStrategy`'s Modifier Pass genuinely reads it (zeroes a skill's effective rank). So counter-tags now do something, but only for checks using that strategy — `StatCheckResolutionStrategy` (the default) still ignores it entirely. Worth a deliberate decision either way rather than leaving it strategy-dependent by accident.
 - `EventManager.resolve_event_solo()` — still unused by UI.
-- `AgentData.compute_suitability(event)` — still dead code, rank-only, not updated to match the newer blended suitability formula (harmless since nothing calls it).
+- ~~`AgentData.compute_suitability(event)`~~ — **actually removed this pass** (it referenced `event.tags`, which no longer exists on `EventData`; had no callers, so deleting was safe). Cross this one off for real.
 - `EventData.assigned_agent_ids` — never populated.
 - `EventData` decision fields — still scaffolding only.
 - A leftover empty, scriptless `"Game"` Node still sits in `Main.tscn` from before the registry became an autoload (§1) — dead, not yet removed.
@@ -609,8 +710,9 @@ Milestone 1 checklist unchanged from the previous version — still substantiall
 **Balance issues**
 - `RANK_THRESHOLDS` tiers 6 and 7 are still identical → rank 6 still unreachable. Unfixed.
 - Injury/KIA rates still unvalidated guesses.
-- The "teamwork" skill-pooling model and the rank/score suitability blend are both **explicitly marked experimental** in code comments — least playtested of everything here. Pooling scales with team size and same-proficiency headcount; could climb faster than intended for a same-specialty squad.
-- Only 1 of 7 event templates and 1 equipment item are actually wired into their respective Inspector arrays right now — most of what's described as "the catalog" exists on disk but isn't live in a fresh playthrough until dragged in.
+- The "teamwork" skill-pooling model, the rank/score suitability blend, and now `TagBreadthResolutionStrategy`'s whole redundancy-weighting curve are all **explicitly marked experimental** — least playtested of everything here.
+- `TagBreadthResolutionStrategy.missing_prereq_penalty` (default 0.75, tuned down once already from an initial 0.5 that playtested as too harsh) is still a single guessed number, not validated further.
+- Only 1 of 7 event templates and 1 equipment item are actually wired into their respective Inspector arrays right now. **This is now a sharper problem than before**: the other 6 templates predate the mandatory-`phases` rework, so if one were dragged into `spawn_templates` today it would spawn with an empty `phases` array — `MissionPhaseRunner` would log a warning and resolve *nothing*, forever, for that event. Any of those 6 needs actual phases/checks authored before it's usable, not just a drag-and-drop.
 
 **Systems intentionally missing**
 - No vehicle/equipment scheduling or exclusivity — pooled across all bases with no ownership checks.
@@ -620,11 +722,15 @@ Milestone 1 checklist unchanged from the previous version — still substantiall
 - `morale` never changes.
 - `magical_item_slot` is still an inert string (the only one of the four original slots not covered by the new equipment system).
 - No multi-base gameplay yet — `BaseManager` is ready for it, nothing uses it (§3.7).
+- No mid-mission decision UI outside of `ChoicePhase.PLAYER_CHOICE` — that one case is real now (§3.8), but the older, separate `EventData` decision-event fields (`is_decision_event` etc.) are still untouched scaffolding, a different half-built feature.
 
 **Untested / unverified**
 - Everything visual still verified only by headless parse plus occasional manual spot-checks, not systematic playtesting.
 - Long-run behavior (50+ days) still never observed.
 - The mission-duration state machine (§3.4) has only been verified by code tracing and a clean headless parse — deeper functional headless testing was unreliable in this environment (§7); worth a manual playtest pass.
+- **`MissionChoiceDialog`'s actual look and click-handling has never been manually playtested** — every check on the async resolution chain and the injectable-picker mechanism was verified headlessly (§3.8), but nobody has looked at the real dialog rendering or clicked an option in a running editor.
+- **`EventLogToggle` doesn't currently follow the left sidebar's slide animation** — an attempt to fix this by nesting it under `LeftToggle` was tried (in-editor) and reverted; it's back to a plain `UI/Root` sibling with a fixed position, so it visually detaches from the sidebar edge when the sidebar opens. Unresolved.
+- The deploy screen's match% (`compute_mission_suitability`) correctly reads each phase's own `MissionCheck.req_*`, not `EventData`'s top-level (now-vestigial) copy — but a `MissionCheck` authored with no `req_*` set at all still reports 100% for that check specifically (the same "nothing required, trivially satisfied" convention `compute_rank_coverage` has always had). Only matters for a `MissionCheck` someone forgot to fill in; not currently an issue for `magical_surge.tres`, whose checks all have real requirements.
 
 ---
 
@@ -632,31 +738,59 @@ Milestone 1 checklist unchanged from the previous version — still substantiall
 
 **Target:** unchanged — 45–60 minutes of play with real decisions, visible progression, an arc.
 
-### Phase A — Make existing systems matter *(highest value per effort)*
+### What this pass actually built
 
-1. **Cohesion affects outcomes.** Still open — same task as before, now with an equipment/tag-modifier precedent to follow: give `EquipmentHandler`-style treatment to cohesion, or add it as another `apply_to_ranks`-style adjustment in `MissionResolver`.
-2. **Counter-tags do something**, or are formally retired in favor of the tag-modifier system that now does something similar. Worth a deliberate decision rather than leaving both half-alive.
-3. **Charge `operation_cost` and equipment acquisition cost.** Two economy sinks now exist in the data model (vehicles, equipment) with no cost gate on either.
-4. **Fix the rank-6 threshold gap.**
-5. **Agent XP and levelling.** Still absent, still the main missing progression fantasy.
+Worth stating plainly since it's easy to lose track of: this pass added **mission-structure depth** (multi-stage/branching missions, a second alternate resolution strategy, a real player-choice pause, an event history log) rather than advancing the Phase A–D checklist below. That checklist is **exactly where it was** — nothing in it got smaller. This was a deliberate, valuable detour (the game now has real moment-to-moment texture during a mission, not just a single roll), but it means Phase A is still the highest-value next move, not something to defer further in favor of more mission-mechanics work.
+
+### Phase A — Make existing systems matter *(highest value per effort, unchanged priority)*
+
+1. **Cohesion affects outcomes.** Still open. Now with *two* precedents to follow instead of one: `TagBreadthResolutionStrategy`'s Modifier Pass (rank deltas from tag matches) and `EquipmentHandler`'s `apply_to_ranks` hook are both "adjust a rank based on some external factor" patterns cohesion could reuse directly — e.g. a flat rank/score bonus scaled by `team.cohesion`, applied in `MissionResolver.compute_team_ranks()` or `compute_team_scores()` right where equipment effects already apply.
+2. **Counter-tags do something, consistently** — no longer fully inert (`TagBreadthResolutionStrategy` reads `MissionCheck.counter_tags` now), but `StatCheckResolutionStrategy` (the default) still ignores it entirely. Decide: wire it into `StatCheckResolutionStrategy` too, or document it as a `TagBreadthResolutionStrategy`-only mechanic on purpose.
+3. **Charge `operation_cost` and equipment acquisition cost.**
+4. **Fix the rank-6 threshold gap** (`RANK_THRESHOLDS` tiers 6/7 identical).
+5. **Agent XP and levelling.**
 
 ### Phase B — Economy and progression
 
-6. **Hire pool**, now with `AgentGenerator` already built as the generation engine — this is mostly a UI + funding-cost task, not a new generation system.
+6. **Hire pool** (`AgentGenerator` already built as the engine — UI + funding-cost task).
 7. **Research system.**
-8. **Vehicle and equipment acquisition.** Both now have a real data model (`BaseData.vehicles`/`local_equipment`, `BaseManager.global_equipment`) with no way to *add* to it except the Inspector.
+8. **Vehicle and equipment acquisition** (`BaseData`/`BaseManager` data model ready, no way to add to it outside the Inspector).
 
 ### Phase C — Narrative texture
 
-9–11. Unchanged: decision events, concealment threshold events, event flavor text.
+9–11. Unchanged: decision events, concealment threshold events, event flavor text. Note `ChoicePhase.PLAYER_CHOICE` (§3.8) is a *different*, already-built mechanism from the still-scaffolding `EventData.is_decision_event` fields — worth deciding whether decision events become "an event whose one phase is a PLAYER_CHOICE ChoicePhase" rather than a separate system.
 
 ### Phase D — Slice completion
 
-12–15. Unchanged: save/load, onboarding, a slice ending, a balance pass — now with more to balance (mission duration, teamwork pooling, score/rank blend weight).
+12–15. Unchanged: save/load, onboarding, a slice ending, a balance pass — now with more to balance (mission duration, teamwork pooling, score/rank blend weight, `TagBreadthResolutionStrategy`'s redundancy curve, `missing_prereq_penalty`).
 
 ### Deliberately deferred
 
-Act 2–5 systems, factions, tactical combat, mirror worlds, and now explicitly: **real multi-base gameplay** (§3.7) — the data model is ready, the decision to build actual base-founding/home-base-assignment gameplay was deliberately deferred this pass.
+Act 2–5 systems, factions, tactical combat, mirror worlds, real multi-base gameplay (§3.7).
+
+---
+
+## Next Session — Concrete Plan
+
+Small, mechanical cleanup first (cheap, removes rough edges from *this* pass), then back to Phase A, which is still the actual priority.
+
+### 1. Cheap fixes left over from this pass *(~30–60 min, do these first)*
+
+- **`EventLogToggle` doesn't follow the sidebar.** Re-add the tween in `root_ui.gd._apply_left()` for `%EventLogToggle`'s `offset_left`/`offset_right` (mirroring `$LeftToggle`'s) — was written once already this pass, then removed when the node was briefly (and unstably) reparented under `LeftToggle` in-editor; it's back to a plain sibling now, so the code-level fix applies again. See §10.
+- **Playtest `MissionChoiceDialog` for real.** Everything about it was verified headlessly (async chain, injectable picker, log threading) but nobody has looked at the actual rendering or clicked a real option. Add a `PLAYER_CHOICE` `ChoicePhase` to a live event template (or a debug-driver key) and actually trigger it in a running editor.
+- **Author phases for at least 2–3 more event templates.** 6 of 7 templates on disk (`data/event_templates/*.tres`) predate the mandatory-`phases` rework — dragging any of them into `spawn_templates` today would spawn an event that silently never resolves (empty `phases`, `MissionPhaseRunner` just warns). Either give them real phases/checks or leave them out of the pool until someone does.
+
+### 2. Phase A, in priority order
+
+1. Cohesion affecting outcomes (item 1 above) — the single highest-value item on the whole roadmap, unchanged for at least two passes running.
+2. Counter-tags decision (item 2 above).
+3. Rank-6 threshold fix — smallest, most mechanical item here; good warm-up before the cohesion work.
+4. `operation_cost` charging.
+5. Agent XP/leveling — biggest of the five, probably its own session.
+
+### 3. If there's time left over
+
+Pick up Phase B (hire pool is the most self-contained — `AgentGenerator` already does the hard part).
 
 ---
 

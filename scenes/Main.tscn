@@ -312,15 +312,12 @@ offset_bottom = 80.0
 focus_mode = 0
 text = "▶"
 
-[node name="EventLogToggle" type="Button" parent="UI/Root/LeftToggle" unique_id=1973512331]
+[node name="EventLogToggle" type="Button" parent="UI/Root" unique_id=1973512331]
 unique_name_in_owner = true
-layout_mode = 0
-offset_left = -310.0
-offset_top = 6.0
-offset_right = -289.0
-offset_bottom = 34.0
-offset_transform_enabled = true
-offset_transform_position = Vector2(310, 30)
+layout_mode = 1
+offset_top = 84.0
+offset_right = 24.0
+offset_bottom = 116.0
 tooltip_text = "Event Log"
 focus_mode = 0
 text = "☰"
