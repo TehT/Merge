@@ -1,5 +1,10 @@
 extends Control
-## RootUI — manages the dual-sidebar layout. Right sidebar holds overview
+class_name RootUI
+## RootUI — manages the dual-sidebar layout, referenced elsewhere via
+## Game.root_ui (registers itself in _ready() — see game.gd) so
+## dynamically-created views (e.g. RightSlideoutViewHire) can open the
+## left sidebar without needing a %-lookup, which doesn't work from
+## runtime-created nodes. Right sidebar holds overview
 ## tabs (Squads, Events, Research, Equipment, Bases — switched via a
 ## vertical icon column below RightToggle rather than the TabContainer's
 ## own tab bar, which ran out of room once there were enough tabs to need
@@ -23,6 +28,7 @@ var _left_open := false
 var _right_open := true
 
 func _ready() -> void:
+	Game.root_ui = self
 	$LeftToggle.pressed.connect(_toggle_left)
 	$RightToggle.pressed.connect(_toggle_right)
 	%EventLogToggle.pressed.connect(func() -> void: Game.slideout_panel.show_event_log())
@@ -50,30 +56,34 @@ func _ready() -> void:
 
 func _on_agent_selected(agent: AgentData) -> void:
 	Game.detail_sidebar.show_agent(agent)
-	_open_left()
+	open_left()
 
 
 func _on_team_selected(team: TeamData) -> void:
 	Game.detail_sidebar.show_team(team)
-	_open_left()
+	open_left()
 
 
 func _on_hq_selected() -> void:
 	Game.detail_sidebar.show_hq()
-	_open_left()
+	open_left()
 
 
 func _on_base_selected(base: BaseData) -> void:
 	Game.detail_sidebar.show_hq(base)
-	_open_left()
+	open_left()
 
 
 func _on_event_selected(ev: EventData) -> void:
 	Game.detail_sidebar.show_event(ev)
-	_open_left()
+	open_left()
 
 
-func _open_left() -> void:
+## Public (unlike _toggle_left/_apply_left) — called from anywhere that
+## just populated Game.detail_sidebar and wants the left sidebar visibly
+## open for it, without caring whether it already was (e.g.
+## RightSlideoutViewHire, clicking a recruit).
+func open_left() -> void:
 	if not _left_open:
 		_left_open = true
 		_apply_left(true)

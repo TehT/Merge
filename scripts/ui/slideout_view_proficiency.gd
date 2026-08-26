@@ -40,7 +40,7 @@ func populate(agent: AgentData, prof_key: String, on_close: Callable) -> void:
 
 	add_child(rank_row)
 
-	var prof_enum: SkillData.Proficiency = SkillData.PROFICIENCY_KEYS.find(prof_key)
+	var prof_enum: SkillData.Proficiency = SkillData.PROFICIENCY_KEYS.find(prof_key) as SkillData.Proficiency
 	var prof_desc := _get_proficiency_description(prof_enum)
 	if prof_desc != "":
 		var desc := Label.new()

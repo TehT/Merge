@@ -1,6 +1,8 @@
 extends "res://scripts/ui/detail_view_base.gd"
 ## DetailViewAgent — full agent sheet: proficiency ranks (clickable, opens
-## the skill drill-down slideout), condition, team, supernatural info.
+## the skill drill-down slideout), equipment, condition, personality
+## (just the Archetype readout — clickable, opens the five-axis
+## breakdown in SlideoutViewPersonality), team, supernatural info.
 
 func populate(agent: AgentData) -> void:
 	_add_title(agent.agent_name)
@@ -30,6 +32,11 @@ func populate(agent: AgentData) -> void:
 	_add_info_row("Level", "%d" % agent.level)
 	_add_info_row("XP", "%d" % agent.experience)
 
+	add_child(HSeparator.new())
+
+	_add_section("Personality")
+	_add_clickable_archetype_row(agent)
+
 	var team: TeamData = Game.team_manager.get_team_of_agent(agent.id)
 	if team:
 		add_child(HSeparator.new())
@@ -41,6 +48,44 @@ func populate(agent: AgentData) -> void:
 		_add_section("Supernatural")
 		_add_info_row("Type", agent.get_type_name())
 		_add_info_row("Power", "%.0f" % agent.supernatural_power)
+
+
+## Just the Archetype name — the five underlying axis bars live in
+## SlideoutViewPersonality (Game.slideout_panel.show_personality()), same
+## drill-down pattern as a clickable proficiency row.
+func _add_clickable_archetype_row(agent: AgentData) -> void:
+	var row := HBoxContainer.new()
+	row.mouse_filter = Control.MOUSE_FILTER_STOP
+	row.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	row.add_theme_constant_override("separation", 6)
+
+	var lbl := Label.new()
+	lbl.text = "Archetype"
+	lbl.custom_minimum_size.x = 80
+	lbl.add_theme_font_size_override("font_size", 13)
+	lbl.add_theme_color_override("font_color", Color(0.55, 0.55, 0.6, 1.0))
+	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(lbl)
+
+	var val_lbl := Label.new()
+	val_lbl.text = agent.get_archetype()
+	val_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	val_lbl.add_theme_font_size_override("font_size", 13)
+	val_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(val_lbl)
+
+	var arrow := Label.new()
+	arrow.text = "›"
+	arrow.add_theme_font_size_override("font_size", 16)
+	arrow.add_theme_color_override("font_color", Color(0.4, 0.42, 0.48, 1.0))
+	arrow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(arrow)
+
+	row.gui_input.connect(func(ev: InputEvent) -> void:
+		if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
+			Game.slideout_panel.show_personality(agent))
+
+	add_child(row)
 
 
 func _add_clickable_slot(slot_type: String, equipped: EquipmentData, agent: AgentData) -> void:

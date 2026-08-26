@@ -3,8 +3,9 @@ extends "res://scripts/ui/slideout_view_base.gd"
 ## the right-side popout (RightSlideoutPanel). Each row shows a recruit's
 ## name/type/proficiency spread and a Hire button (disabled if funding is
 ## short); hiring moves them onto the roster immediately and removes them
-## from the pool. Flat list, no further drill-down — same scope decision
-## as EquipmentTab until there's a reason to build more.
+## from the pool. Clicking anywhere on a row other than the Hire button
+## opens that recruit's full agent sheet in the left DetailPanel (same
+## view a roster agent gets) — a preview before committing funding to them.
 
 var _list: VBoxContainer
 
@@ -65,14 +66,24 @@ func _make_recruit_row(recruit: AgentData) -> Control:
 
 	var panel := PanelContainer.new()
 	panel.add_theme_stylebox_override("panel", style)
+	panel.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 
 	var vbox := VBoxContainer.new()
+	vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vbox.add_theme_constant_override("separation", 4)
 	panel.add_child(vbox)
 
 	var name_lbl := Label.new()
 	name_lbl.text = "%s  (%s)" % [recruit.agent_name, recruit.get_type_name()]
+	name_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vbox.add_child(name_lbl)
+
+	var archetype_lbl := Label.new()
+	archetype_lbl.text = recruit.get_archetype()
+	archetype_lbl.add_theme_font_size_override("font_size", 12)
+	archetype_lbl.add_theme_color_override("font_color", Color(0.7, 0.65, 0.5, 1.0))
+	archetype_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	vbox.add_child(archetype_lbl)
 
 	var ranks := recruit.get_proficiency_ranks()
 	var stats := Label.new()
@@ -83,6 +94,7 @@ func _make_recruit_row(recruit: AgentData) -> Control:
 	]
 	stats.add_theme_font_size_override("font_size", 12)
 	stats.add_theme_color_override("font_color", Color(0.6, 0.62, 0.68, 1.0))
+	stats.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vbox.add_child(stats)
 
 	var cost := Game.hiring_manager.hire_cost
@@ -95,5 +107,14 @@ func _make_recruit_row(recruit: AgentData) -> Control:
 	hire_btn.pressed.connect(func() -> void:
 		Game.hiring_manager.hire(recruit.id))
 	vbox.add_child(hire_btn)
+
+	# The Hire button (default MOUSE_FILTER_STOP) consumes its own clicks
+	# before they'd reach this — everything else on the row (name/stats,
+	# both set to IGNORE above) falls through to it instead.
+	panel.gui_input.connect(func(input_event: InputEvent) -> void:
+		if input_event is InputEventMouseButton and input_event.pressed \
+				and input_event.button_index == MOUSE_BUTTON_LEFT:
+			Game.detail_sidebar.show_agent(recruit)
+			Game.root_ui.open_left())
 
 	return panel

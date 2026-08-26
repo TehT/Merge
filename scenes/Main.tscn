@@ -29,9 +29,9 @@
 [ext_resource type="Script" uid="uid://bj538xi1vtr46" path="res://scripts/managers/base_manager.gd" id="22_basemanager"]
 [ext_resource type="Script" uid="uid://drg2k66cmj2ix" path="res://scripts/ui/mission_choice_dialog.gd" id="23_missionchoicedialog"]
 [ext_resource type="Script" uid="uid://ccpg4t1tynq76" path="res://scripts/managers/event_log.gd" id="24_eventlog"]
-[ext_resource type="Script" path="res://scripts/managers/hiring_manager.gd" id="25_hiringmanager"]
-[ext_resource type="Script" path="res://scripts/ui/right_slideout_panel.gd" id="27_rightslideout"]
-[ext_resource type="Script" path="res://scripts/ui/bases_tab.gd" id="28_basestab"]
+[ext_resource type="Script" uid="uid://k3u0nglcx1qi" path="res://scripts/managers/hiring_manager.gd" id="25_hiringmanager"]
+[ext_resource type="Script" uid="uid://q34k46h43i14" path="res://scripts/ui/right_slideout_panel.gd" id="27_rightslideout"]
+[ext_resource type="Script" uid="uid://74brlnr2uioy" path="res://scripts/ui/bases_tab.gd" id="28_basestab"]
 
 [sub_resource type="Environment" id="Environment_1"]
 background_mode = 2
@@ -84,7 +84,7 @@ script = ExtResource("8_concealmentstate")
 unique_name_in_owner = true
 script = ExtResource("9_agentmanager")
 
-[node name="HiringManager" type="Node" parent="."]
+[node name="HiringManager" type="Node" parent="." unique_id=1030774405]
 unique_name_in_owner = true
 script = ExtResource("25_hiringmanager")
 
@@ -322,7 +322,6 @@ text = "▶"
 [node name="EventLogToggle" type="Button" parent="UI/Root/LeftToggle" unique_id=1973512331]
 unique_name_in_owner = true
 layout_mode = 1
-anchors_preset = 0
 offset_top = 36.0
 offset_right = 24.0
 offset_bottom = 68.0
@@ -395,13 +394,13 @@ layout_mode = 2
 size_flags_horizontal = 3
 script = ExtResource("21_equipmenttab")
 
-[node name="Bases" type="ScrollContainer" parent="UI/Root/RightSidebar/Tabs"]
+[node name="Bases" type="ScrollContainer" parent="UI/Root/RightSidebar/Tabs" unique_id=833964492]
 visible = false
 layout_mode = 2
 horizontal_scroll_mode = 0
 metadata/_tab_index = 4
 
-[node name="BasesList" type="VBoxContainer" parent="UI/Root/RightSidebar/Tabs/Bases"]
+[node name="BasesList" type="VBoxContainer" parent="UI/Root/RightSidebar/Tabs/Bases" unique_id=17296059]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
@@ -420,56 +419,55 @@ grow_horizontal = 0
 focus_mode = 0
 text = "▶"
 
-[node name="RightTabIcons" type="VBoxContainer" parent="UI/Root/RightToggle"]
+[node name="RightTabIcons" type="VBoxContainer" parent="UI/Root/RightToggle" unique_id=1804580901]
 unique_name_in_owner = true
 layout_mode = 1
-anchors_preset = 0
 offset_top = 36.0
 offset_right = 24.0
 offset_bottom = 196.0
 theme_override_constants/separation = 4
 
-[node name="SquadsIcon" type="Button" parent="UI/Root/RightToggle/RightTabIcons"]
+[node name="SquadsIcon" type="Button" parent="UI/Root/RightToggle/RightTabIcons" unique_id=171814983]
 unique_name_in_owner = true
-layout_mode = 2
 custom_minimum_size = Vector2(24, 28)
+layout_mode = 2
+tooltip_text = "Squads"
 focus_mode = 0
 text = "⚑"
-tooltip_text = "Squads"
 
-[node name="EventsIcon" type="Button" parent="UI/Root/RightToggle/RightTabIcons"]
+[node name="EventsIcon" type="Button" parent="UI/Root/RightToggle/RightTabIcons" unique_id=1590490120]
 unique_name_in_owner = true
-layout_mode = 2
 custom_minimum_size = Vector2(24, 28)
+layout_mode = 2
+tooltip_text = "Events"
 focus_mode = 0
 text = "⚠"
-tooltip_text = "Events"
 
-[node name="ResearchIcon" type="Button" parent="UI/Root/RightToggle/RightTabIcons"]
+[node name="ResearchIcon" type="Button" parent="UI/Root/RightToggle/RightTabIcons" unique_id=380376329]
 unique_name_in_owner = true
-layout_mode = 2
 custom_minimum_size = Vector2(24, 28)
+layout_mode = 2
+tooltip_text = "Research"
 focus_mode = 0
 text = "⚗"
-tooltip_text = "Research"
 
-[node name="EquipmentIcon" type="Button" parent="UI/Root/RightToggle/RightTabIcons"]
+[node name="EquipmentIcon" type="Button" parent="UI/Root/RightToggle/RightTabIcons" unique_id=2115561818]
 unique_name_in_owner = true
-layout_mode = 2
 custom_minimum_size = Vector2(24, 28)
+layout_mode = 2
+tooltip_text = "Equipment"
 focus_mode = 0
 text = "⚙"
-tooltip_text = "Equipment"
 
-[node name="BasesIcon" type="Button" parent="UI/Root/RightToggle/RightTabIcons"]
+[node name="BasesIcon" type="Button" parent="UI/Root/RightToggle/RightTabIcons" unique_id=1023195699]
 unique_name_in_owner = true
-layout_mode = 2
 custom_minimum_size = Vector2(24, 28)
+layout_mode = 2
+tooltip_text = "Bases"
 focus_mode = 0
 text = "⌂"
-tooltip_text = "Bases"
 
-[node name="RightSlideout" type="PanelContainer" parent="UI/Root"]
+[node name="RightSlideout" type="PanelContainer" parent="UI/Root" unique_id=618008480]
 unique_name_in_owner = true
 layout_mode = 1
 anchors_preset = 11

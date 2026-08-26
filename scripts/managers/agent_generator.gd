@@ -1,12 +1,13 @@
 ## AgentGenerator — procedural agent creation. Builds a full AgentData
-## (skills + proficiency spread) from an archetype and a proficiency
-## choice, drawing skills from SkillHandler.get_skills_for_proficiency()
-## and instantiate()ing them so generated agents never alias a shared
-## catalog resource. A static utility (RefCounted), not an autoload.
+## (skills + proficiency spread + personality) drawing skills from
+## SkillHandler.get_skills_for_proficiency() and instantiate()ing them so
+## generated agents never alias a shared catalog resource. A static
+## utility (RefCounted), not an autoload. generate_random() is the sole
+## entry point callers should use (see below) — generate_specialist()/
+## generate_generalist()/generate_random_specialist() are its building
+## blocks, still independently useful for hand-authored content.
 class_name AgentGenerator
 extends RefCounted
-
-enum Archetype { SPECIALIST, GENERALIST }
 
 ## Specialist: 5 skills total — 3 in a primary Proficiency (one at rank 2,
 ## two at rank 1, which SkillHandler's rank aggregation resolves to
@@ -63,10 +64,26 @@ static func generate_random_specialist(agent_name: String,
 	return generate_specialist(agent_name, profs[0], profs[1], supernatural_type)
 
 
-static func generate(agent_name: String, archetype: Archetype,
+## Rolls a full personality (PersonalityHandler.roll_random_axes()),
+## derives Specialist vs. Generalist from the Protocol axis instead of an
+## independent coin flip — a high-Protocol/Orthodox agent tests out as a
+## Specialist, one correlation, nothing deeper yet (design doc §3.6).
+## generalist_chance keeps its old aggregate meaning (0.6 = 60%
+## generalists): Protocol rolls uniform 0-100, so gating the split at
+## (100 * generalist_chance) reproduces the same population-level ratio
+## the old independent flip gave. The sole entry point every caller
+## (AgentManager's starting roster, HiringManager's weekly pool) should use.
+static func generate_random(agent_name: String, generalist_chance: float,
 		supernatural_type: AgentData.SupernaturalType = AgentData.SupernaturalType.NONE) -> AgentData:
-	match archetype:
-		Archetype.SPECIALIST:
-			return generate_random_specialist(agent_name, supernatural_type)
-		_:
-			return generate_generalist(agent_name, supernatural_type)
+	var personality := PersonalityHandler.roll_random_axes()
+	var is_generalist: bool = personality["protocol"] < int(100.0 * generalist_chance)
+
+	var agent: AgentData = generate_generalist(agent_name, supernatural_type) if is_generalist \
+			else generate_random_specialist(agent_name, supernatural_type)
+
+	agent.protocol = personality["protocol"]
+	agent.nerve = personality["nerve"]
+	agent.attachment = personality["attachment"]
+	agent.esoterica = personality["esoterica"]
+	agent.ego = personality["ego"]
+	return agent

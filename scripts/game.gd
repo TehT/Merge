@@ -15,3 +15,4 @@ var detail_sidebar: DetailSidebar
 var slideout_panel: SlideoutPanel
 var right_slideout_panel: RightSlideoutPanel
 var mission_choice_dialog: MissionChoiceDialog
+var root_ui: RootUI

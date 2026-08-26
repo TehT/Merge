@@ -56,9 +56,7 @@ func _refresh_pool() -> void:
 
 func _generate_recruit() -> AgentData:
 	var recruit_name := NameGenerator.generate_name()
-	var archetype := AgentGenerator.Archetype.GENERALIST if randf() < generalist_chance \
-			else AgentGenerator.Archetype.SPECIALIST
-	return AgentGenerator.generate(recruit_name, archetype)
+	return AgentGenerator.generate_random(recruit_name, generalist_chance)
 
 ## Hires the given pool recruit onto the roster for hire_cost funding.
 ## Returns false (no charge, no change) if the recruit isn't in the pool

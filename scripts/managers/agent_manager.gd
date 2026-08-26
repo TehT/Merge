@@ -24,19 +24,18 @@ func _ready() -> void:
 	print("[AgentManager] roster initialized with %d agents" % roster.size())
 
 ## Starting roster, procedurally built via AgentGenerator instead of
-## hand-authored — each recruit gets a NameGenerator name, rolls
-## Generalist vs. Specialist per generalist_chance, then AgentGenerator
-## draws their skills from the res://data/skills/<proficiency>/ catalog.
-## All mundane for now; nothing rolls a SupernaturalType yet since there's
-## no Awakened skill catalog to draw from.
+## hand-authored — each recruit gets a NameGenerator name, then
+## AgentGenerator.generate_random() rolls their personality first and
+## derives Generalist vs. Specialist from it (generalist_chance keeps its
+## old aggregate meaning as a threshold on the Protocol axis — see
+## AgentGenerator), draws skills from the res://data/skills/<proficiency>/
+## catalog. All mundane for now; nothing rolls a SupernaturalType yet
+## since there's no Awakened skill catalog to draw from.
 func _create_starting_roster() -> Array[AgentData]:
 	var roster_out: Array[AgentData] = []
 	for i in range(starting_roster_size):
 		var recruit_name := NameGenerator.generate_name()
-		if randf() < generalist_chance:
-			roster_out.append(AgentGenerator.generate_generalist(recruit_name))
-		else:
-			roster_out.append(AgentGenerator.generate_random_specialist(recruit_name))
+		roster_out.append(AgentGenerator.generate_random(recruit_name, generalist_chance))
 	return roster_out
 
 ## Adds a hired recruit (from HiringManager) directly onto the roster —

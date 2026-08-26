@@ -28,6 +28,20 @@ enum Status { AVAILABLE, DEPLOYED, INJURED, TRAINING, KIA }
 @export_multiline var backstory: String = ""
 @export var personality_traits: PackedStringArray = []
 
+## ── Personality ─────────────────────────────────────────────────────────────
+## Five axes (0-100), the Personality Matrix — see PersonalityHandler and
+## concurrence_agent_design_merged.md §3. Modulates outcome texture
+## (nothing yet actually reads these beyond display and get_archetype() —
+## Quirks/Crucibles/team-synergy modifiers are a separate, not-yet-built
+## system), not the base mission-resolution arithmetic.
+
+@export_group("Personality")
+@export_range(0, 100) var protocol: int = 50     ## Improviser ↔ Orthodox
+@export_range(0, 100) var nerve: int = 50        ## Cautious ↔ Reckless
+@export_range(0, 100) var attachment: int = 50   ## Detached ↔ Compassionate
+@export_range(0, 100) var esoterica: int = 50    ## Pragmatic ↔ Attuned
+@export_range(0, 100) var ego: int = 50          ## Collaborator ↔ Dominant
+
 ## ── Skills & Proficiencies ─────────────────────────────────────────────────
 ## Proficiency scores are derived from the skills array — not set directly.
 ## Each skill contributes rank × RANK_SCALE to its proficiency category.
@@ -172,3 +186,21 @@ func get_status_name() -> String:
 
 func is_available() -> bool:
 	return status == Status.AVAILABLE
+
+## Live-computed Personality Matrix readout — never stored, so drift
+## changes it for free. See PersonalityHandler.compute_archetype().
+func get_archetype() -> String:
+	return PersonalityHandler.compute_archetype(self)
+
+## Nudges one personality axis by delta (+/-), clamped to 0-100. The
+## callable primitive behind both Drift tiers (design doc §3.4) — Crucible
+## shocks (large, one-shot) and organic drift (small, repeated) — though
+## no trigger calls this yet; that's future work.
+func drift_axis(axis_key: String, delta: int) -> void:
+	match axis_key:
+		"protocol": protocol = clampi(protocol + delta, 0, 100)
+		"nerve": nerve = clampi(nerve + delta, 0, 100)
+		"attachment": attachment = clampi(attachment + delta, 0, 100)
+		"esoterica": esoterica = clampi(esoterica + delta, 0, 100)
+		"ego": ego = clampi(ego + delta, 0, 100)
+		_: push_warning("AgentData.drift_axis: unknown axis '%s'" % axis_key)
