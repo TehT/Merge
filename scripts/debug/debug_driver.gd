@@ -16,6 +16,7 @@ extends Node
 ## 9: print full status (events + roster + teams + resources)
 ## 0: print team status (cohesion, members)
 ## T: start training for the first team (requires all members Available)
+## P: print per-skill and per-Proficiency XP for the whole roster
 
 func _unhandled_input(event: InputEvent) -> void:
 	if not (event is InputEventKey and event.pressed and not event.echo):
@@ -36,6 +37,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		KEY_9: _print_full_status()
 		KEY_0: Game.team_manager.print_team_status()
 		KEY_T: _train_first_team()
+		KEY_P: Game.agent_manager.print_xp_status()
 
 func _list_events() -> void:
 	var events: Array[EventData] = Game.event_manager.get_active_events()

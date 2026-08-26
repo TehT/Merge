@@ -62,8 +62,6 @@ enum Status { AVAILABLE, DEPLOYED, INJURED, TRAINING, KIA }
 
 var health: float = 100.0
 var morale: float = 75.0
-var experience: int = 0
-var level: int = 1
 var status: Status = Status.AVAILABLE
 
 ## ── Equipment ───────────────────────────────────────────────────────────────
@@ -127,6 +125,19 @@ func get_skills() -> Dictionary:
 ## See EquipmentHandler.compute_effective_ranks().
 func get_proficiency_ranks(active_tags: PackedStringArray = PackedStringArray()) -> Dictionary:
 	return EquipmentHandler.compute_effective_ranks(self, active_tags)
+
+## Single "how developed is this agent overall" number — the mean of all
+## six Proficiency ranks. Replaces the old flat AgentData.level (removed):
+## TeamData's per-member weighting uses this instead, and Proficiency
+## ranks are already the live, derived signal of capability now that
+## individual skills carry their own XP (see SkillHandler.award_skill_xp/
+## award_proficiency_xp) rather than a separate agent-level XP track.
+func get_average_proficiency_rank() -> float:
+	var ranks := get_proficiency_ranks()
+	var total := 0
+	for key: String in ranks:
+		total += ranks[key]
+	return float(total) / ranks.size()
 
 ## True if agent meets every one of item's requirements — see
 ## EquipmentHandler.can_equip().

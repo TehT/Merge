@@ -29,8 +29,6 @@ func populate(agent: AgentData) -> void:
 	_add_section("Condition")
 	_add_info_row("Health", "%d / %d" % [int(agent.health), int(agent.max_health)])
 	_add_info_row("Morale", "%d" % int(agent.morale))
-	_add_info_row("Level", "%d" % agent.level)
-	_add_info_row("XP", "%d" % agent.experience)
 
 	add_child(HSeparator.new())
 

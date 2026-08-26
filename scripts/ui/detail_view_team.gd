@@ -47,7 +47,7 @@ func populate(team: TeamData) -> void:
 	add_child(HSeparator.new())
 	_add_section("Members")
 	for m in members:
-		_add_info_row(m.agent_name, "%s  Lv%d" % [m.get_status_name(), m.level])
+		_add_info_row(m.agent_name, m.get_status_name())
 
 
 func _get_team_members(team: TeamData) -> Array[AgentData]:

@@ -52,6 +52,11 @@ const VISIBLE_MAX_RANK: int = 5
 @export_range(1, 5) var rank: int = 1
 @export var tags: PackedStringArray = []
 
+## Progress toward this skill's next rank — see SkillHandler.award_skill_xp().
+## Not exported: this is runtime accumulation, not catalog/authored data
+## (a fresh SkillHandler.instantiate() from the catalog always starts at 0).
+var xp: int = 0
+
 func _init(p_name: String = "", p_prof: Proficiency = Proficiency.COMBAT,
 		p_rank: int = 1, p_tags: PackedStringArray = []) -> void:
 	skill_name = p_name

@@ -61,4 +61,6 @@ func get_target_values() -> Dictionary:
 
 func resolve(squad: Array[AgentData]) -> MissionResolutionResult:
 	var strategy := resolution_strategy if resolution_strategy != null else StatCheckResolutionStrategy.new()
-	return strategy.resolve(self, squad)
+	var result := strategy.resolve(self, squad)
+	SkillHandler.award_xp_for_check(self, squad, result.outcome)
+	return result

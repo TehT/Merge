@@ -81,3 +81,25 @@ func print_roster_status() -> void:
 			ranks["influence"], ranks["ingenuity"],
 			a.health, a.max_health,
 		])
+
+## Per-skill and per-Proficiency XP, for watching SkillHandler.
+## award_xp_for_check() actually land after missions resolve. Proficiency
+## totals are just the sum of that category's own skills' current xp
+## (progress-toward-next-rank, not lifetime XP earned — a skill's xp
+## resets on rank-up or at the rank cap, see award_skill_xp), so this
+## reads as "how close is each category to its next skill rank-up," not a
+## cumulative history.
+func print_xp_status() -> void:
+	print("[AgentManager] XP status (%d agents):" % roster.size())
+	for a in roster:
+		print("  %s:" % a.agent_name)
+		var prof_totals := SkillHandler.empty_rank_dict()
+		for skill: SkillData in a.skills:
+			prof_totals[skill.get_proficiency_key()] += skill.xp
+			print("    %s [%s] rank=%d xp=%d/%d" % [
+				skill.skill_name, skill.get_proficiency_name(), skill.rank,
+				skill.xp, SkillHandler.XP_PER_RANK,
+			])
+		for key: String in SkillData.PROFICIENCY_KEYS:
+			if prof_totals[key] > 0:
+				print("    -- %s total: %d xp" % [key.capitalize(), prof_totals[key]])

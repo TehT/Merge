@@ -20,16 +20,16 @@ extends RefCounted
 ## (ranks.size() < min_skills breaks the walk) until it grows enough
 ## skills, same as any agent short of a tier's min_rank.
 const RANK_THRESHOLDS: Array[Dictionary] = [
-	{"min_skills": 1, "min_rank": 1},
-	{"min_skills": 1, "min_rank": 2},
-	{"min_skills": 2, "min_rank": 2},
-	{"min_skills": 2, "min_rank": 3},
-	{"min_skills": 3, "min_rank": 3},
-	{"min_skills": 2, "min_rank": 4},
-	{"min_skills": 3, "min_rank": 4},
-	{"min_skills": 4, "min_rank": 4},
-	{"min_skills": 4, "min_rank": 5},
-	{"min_skills": 5, "min_rank": 5},
+	{"min_skills": 1, "min_rank": 1}, #Rank 1
+	{"min_skills": 1, "min_rank": 2}, #Rank 2
+	{"min_skills": 2, "min_rank": 2}, #Rank 3
+	{"min_skills": 2, "min_rank": 3}, #Rank 4
+	{"min_skills": 3, "min_rank": 3}, #Rank 5
+	{"min_skills": 2, "min_rank": 4}, #Rank 6
+	{"min_skills": 3, "min_rank": 4}, #Rank 7
+	{"min_skills": 4, "min_rank": 4}, #Rank 8
+	{"min_skills": 4, "min_rank": 5}, #Rank 9
+	{"min_skills": 5, "min_rank": 5}, #Rank 10
 ]
 
 ## Every known tag-interaction rule (see SkillTagModifier), loaded from
@@ -100,6 +100,107 @@ static func instantiate(base: SkillData, rank: int) -> SkillData:
 	var s: SkillData = base.duplicate()
 	s.rank = rank
 	return s
+
+## Flat XP cost to advance a skill by one rank. A placeholder curve, not a
+## tuned one — revisit once there's real playtesting to balance XP gain
+## rates against, same "don't nail it down yet" posture as operation_cost.
+const XP_PER_RANK: int = 100
+
+## Multiplier applied to a skill's XP award when it was specifically
+## exercised during whatever earned the XP, vs. riding along on its
+## Proficiency category's base award (see award_proficiency_xp). Also a
+## placeholder value.
+const UTILIZED_XP_MULTIPLIER: float = 2.0
+
+## Adds xp to one skill, ranking it up (possibly more than once in a
+## single call) whenever accumulated xp clears XP_PER_RANK, capped at
+## VISIBLE_MAX_RANK. XP is discarded once a skill hits the cap — nothing
+## to carry forward toward, since rank can't go higher.
+static func award_skill_xp(skill: SkillData, amount: int) -> void:
+	skill.xp += amount
+	while skill.rank < SkillData.VISIBLE_MAX_RANK and skill.xp >= XP_PER_RANK:
+		skill.xp -= XP_PER_RANK
+		skill.rank += 1
+	if skill.rank >= SkillData.VISIBLE_MAX_RANK:
+		skill.xp = 0
+
+## Awards XP to every one of an agent's own skills (not equipment-granted
+## ones — those aren't the agent's to level) in one Proficiency category:
+## base_amount to each, times UTILIZED_XP_MULTIPLIER for whichever skills'
+## names appear in utilized_skill_names. Nothing supplies that list yet —
+## no resolution strategy currently exposes "which specific skills this
+## check drew on" in a queryable form (TagBreadthResolutionStrategy comes
+## closest, via its per-skill Modifier Pass, but doesn't surface it
+## outside its own log) — so today every skill in the category gets the
+## same base award until that's wired up.
+static func award_proficiency_xp(agent: AgentData, proficiency_key: String,
+		base_amount: int, utilized_skill_names: PackedStringArray = PackedStringArray()) -> void:
+	for skill: SkillData in agent.skills:
+		if skill.get_proficiency_key() != proficiency_key:
+			continue
+		var amount := base_amount
+		if skill.skill_name in utilized_skill_names:
+			amount = int(round(base_amount * UTILIZED_XP_MULTIPLIER))
+		award_skill_xp(skill, amount)
+
+## Base XP a resolved check awards per qualifying Proficiency category,
+## before CHECK_OUTCOME_XP_MULTIPLIER and UTILIZED_XP_MULTIPLIER scale it
+## further. Placeholder, not tuned — same posture as XP_PER_RANK.
+const BASE_CHECK_XP: int = 20
+
+## How much of BASE_CHECK_XP a check actually pays out per outcome — a
+## botched check still teaches something, just less than a clean one.
+## Placeholder values.
+const CHECK_OUTCOME_XP_MULTIPLIER: Dictionary = {
+	MissionResolutionResult.Outcome.SUCCESS: 1.0,
+	MissionResolutionResult.Outcome.PARTIAL: 0.5,
+	MissionResolutionResult.Outcome.FAILURE: 0.25,
+}
+
+## Mission-aware entry point, called automatically from MissionCheck.
+## resolve() (both SinglePhase and ChoicePhase's chosen check run through
+## it — see there) — nothing else needs to call this directly. Awards XP
+## for one resolved check across a squad, at the granularity the mission
+## actually earned it: only in the categories the check requires (a squad
+## member with no skills in a required category simply has nothing to
+## award), scaled by CHECK_OUTCOME_XP_MULTIPLIER for how the check actually
+## went, and with per-skill "utilized" detection based on tag overlap with
+## the check itself rather than a caller-supplied list. A skill counts as
+## utilized if it shares a tag with check.tags (the same Exploited-style
+## match TagBreadthResolutionStrategy already uses) and isn't countered by
+## check.counter_tags — a countered skill contributed nothing to the roll,
+## so it shouldn't earn the bonus even if it happens to share another tag
+## with the check.
+##
+## Example: a check requiring Combat + Subterfuge, tagged [Olfactory],
+## that resolves SUCCESS. Nick has skills in both categories -> XP in
+## both. Judy only has Subterfuge skills -> XP in Subterfuge only, and
+## her Subterfuge skill "Sniffer" (tagged [Olfactory]) gets the utilized
+## multiplier on top.
+static func award_xp_for_check(check: MissionCheck, squad: Array[AgentData],
+		outcome: MissionResolutionResult.Outcome) -> void:
+	var amount := int(round(BASE_CHECK_XP * float(CHECK_OUTCOME_XP_MULTIPLIER.get(outcome, 0.0))))
+	if amount <= 0:
+		return
+	var reqs := check.get_proficiency_requirements()
+	for key: String in SkillData.PROFICIENCY_KEYS:
+		if reqs.get(key, 0) <= 0:
+			continue
+		for agent: AgentData in squad:
+			var utilized := _utilized_skill_names(agent, key, check)
+			award_proficiency_xp(agent, key, amount, utilized)
+
+static func _utilized_skill_names(agent: AgentData, proficiency_key: String,
+		check: MissionCheck) -> PackedStringArray:
+	var names := PackedStringArray()
+	for skill: SkillData in agent.skills:
+		if skill.get_proficiency_key() != proficiency_key:
+			continue
+		if is_countered_by(skill, check.counter_tags):
+			continue
+		if is_countered_by(skill, check.tags):
+			names.append(skill.skill_name)
+	return names
 
 ## Every catalog skill belonging to one Proficiency, scanned live from
 ## res://data/skills/<proficiency>/ — add a .tres there and it's picked up

@@ -79,7 +79,7 @@ func compute_effective_skills(members: Array[AgentData]) -> Dictionary:
 
 	var weight_sum := 0.0
 	for m in members:
-		var w := float(maxi(1, m.level))
+		var w := maxf(1.0, m.get_average_proficiency_rank())
 		weight_sum += w
 		var scores := m.get_proficiency_scores()
 		for key: String in totals:
