@@ -19,15 +19,13 @@ const POLE_NAMES: Dictionary = {
 	"ego": {"low": "Collaborator", "high": "Dominant"},
 }
 
-## The Archetype naming scheme (given, not derived from the design doc's
-## own seed table — this fully replaces that curated 7-pair + generic-
-## fallback approach). Each pole has a "Primary Archetype" noun-phrase,
-## used when that axis is the agent's *most* extreme, and an "Archetype
-## Modifier" adjective, used when it's the *second*-most extreme — so
-## which of an agent's two dominant axes is more extreme genuinely changes
-## the result (A-primary/B-secondary reads differently from B-primary/
-## A-secondary), not just which two axes are involved.
-const PRIMARY_ARCHETYPES: Dictionary = {
+## Base single-axis titles — used by the cascade's dynamic bottom tier
+## (see compute_archetype), never as a fixed CASCADE entry: a fixed entry
+## per axis would let list-order silently override actual extremity
+## (whichever axis's entry appears first would win for almost every
+## agent, since "moderate" thresholds match most non-neutral values).
+## Picking the single most-extreme axis at lookup time avoids that.
+const BASE_TITLES: Dictionary = {
 	"protocol": {"low": "The Maverick", "high": "The Purist"},
 	"nerve": {"low": "The Sentinel", "high": "The Daredevil"},
 	"attachment": {"low": "The Observer", "high": "The Guardian"},
@@ -35,13 +33,32 @@ const PRIMARY_ARCHETYPES: Dictionary = {
 	"ego": {"low": "The Catalyst", "high": "The Sovereign"},
 }
 
-const ARCHETYPE_MODIFIERS: Dictionary = {
-	"protocol": {"low": "Unbound", "high": "Strict"},
-	"nerve": {"low": "Wary", "high": "Volatile"},
-	"attachment": {"low": "Cold", "high": "Empathetic"},
-	"esoterica": {"low": "Grounded", "high": "Ethereal"},
-	"ego": {"low": "Synergistic", "high": "Commanding"},
-}
+## The Archetype Priority Cascade: curated, top-down, first-match-wins.
+## Each entry is {"title": String, "conditions": Array of [axis,
+## comparator, threshold]}, AND-combined. Ordered most specific/extreme
+## first — Apex (3 axes, <20/>80ish) above Synergy (2 axes, <35/>65ish) —
+## so a rarer, more specific match is never shadowed by a broader one
+## listed after it. A starter set; edit freely, but keep new entries
+## slotted in by specificity, not appended at the end.
+const CASCADE: Array = [
+	# --- Apex: three axes at extreme thresholds ---
+	{"title": "The Shadow Sovereign", "conditions": [["attachment", "<", 15], ["ego", ">", 85], ["nerve", "<", 30]]},
+	{"title": "The Zealot", "conditions": [["protocol", ">", 85], ["esoterica", ">", 80], ["nerve", "<", 20]]},
+	{"title": "The Berserker", "conditions": [["protocol", "<", 20], ["nerve", ">", 85], ["ego", ">", 80]]},
+	{"title": "The Ghost", "conditions": [["protocol", ">", 80], ["nerve", "<", 20], ["attachment", "<", 20]]},
+	{"title": "The Oracle", "conditions": [["attachment", ">", 80], ["esoterica", ">", 85], ["ego", "<", 20]]},
+	{"title": "The Warlord", "conditions": [["protocol", ">", 80], ["attachment", "<", 20], ["ego", ">", 85]]},
+
+	# --- Synergy: two axes at strong thresholds ---
+	{"title": "The Hothead", "conditions": [["nerve", ">", 60], ["protocol", "<", 49]]},
+	{"title": "The Cold Operator", "conditions": [["protocol", ">", 65], ["attachment", "<", 35]]},
+	{"title": "The True Believer", "conditions": [["protocol", ">", 65], ["esoterica", ">", 65]]},
+	{"title": "The Company Man", "conditions": [["protocol", ">", 65], ["ego", "<", 35]]},
+	{"title": "The Loose Cannon", "conditions": [["nerve", ">", 65], ["attachment", "<", 35]]},
+	{"title": "The Iron Fist", "conditions": [["nerve", "<", 35], ["ego", ">", 65]]},
+	{"title": "The Zealous Guardian", "conditions": [["attachment", ">", 65], ["esoterica", ">", 65]]},
+	{"title": "The Kingmaker", "conditions": [["attachment", ">", 65], ["ego", ">", 65]]},
+]
 
 ## Independent uniform 0-100 roll per axis — today's only source of
 ## initial personality (Backgrounds, which the design doc frames as the
@@ -54,13 +71,11 @@ static func roll_random_axes() -> Dictionary:
 
 
 ## Live-computed — never stored on the agent, so personality drift changes
-## an agent's Archetype for free the moment it happens. Ranks all five
-## axes by distance from the neutral midpoint (50); the most extreme axis
-## supplies the Primary Archetype noun, the second-most-extreme supplies
-## the Modifier adjective, combined as "The <Modifier> <noun>" (the
-## primary name's own "The " is stripped before combining). Full 10×9
-## coverage by construction — no fallback needed. Ties resolve by
-## AXIS_KEYS order; exactly 50 counts as the high pole.
+## an agent's Archetype for free the moment it happens. Walks CASCADE
+## top-down and returns the first rule whose conditions all pass. If none
+## match, falls through to a dynamic single-axis title (BASE_TITLES) for
+## whichever axis sits furthest from neutral — and to "The Citizen" only
+## when every axis is exactly 50 (nothing to name).
 static func compute_archetype(agent: AgentData) -> String:
 	var values: Dictionary = {
 		"protocol": agent.protocol,
@@ -70,17 +85,37 @@ static func compute_archetype(agent: AgentData) -> String:
 		"ego": agent.ego,
 	}
 
+	for rule: Dictionary in CASCADE:
+		if _matches(rule["conditions"], values):
+			return rule["title"]
+
 	var ranked: Array = Array(AXIS_KEYS)
 	ranked.sort_custom(func(a: String, b: String) -> bool:
 		return abs(values[a] - 50) > abs(values[b] - 50))
 
-	var primary_axis: String = ranked[0]
-	var secondary_axis: String = ranked[1]
-	var primary_pole: String = "high" if values[primary_axis] >= 50 else "low"
-	var secondary_pole: String = "high" if values[secondary_axis] >= 50 else "low"
+	var top_axis: String = ranked[0]
+	if values[top_axis] == 50:
+		return "The Citizen"
 
-	var primary_name: String = PRIMARY_ARCHETYPES[primary_axis][primary_pole]
-	var modifier: String = ARCHETYPE_MODIFIERS[secondary_axis][secondary_pole]
-	var noun: String = primary_name.trim_prefix("The ")
+	var pole: String = "high" if values[top_axis] > 50 else "low"
+	return BASE_TITLES[top_axis][pole]
 
-	return "The %s %s" % [modifier, noun]
+
+static func _matches(conditions: Array, values: Dictionary) -> bool:
+	for cond: Array in conditions:
+		var axis: String = cond[0]
+		var comparator: String = cond[1]
+		var threshold: int = cond[2]
+		var value: int = values[axis]
+		var passes: bool
+		match comparator:
+			"<": passes = value < threshold
+			">": passes = value > threshold
+			"<=": passes = value <= threshold
+			">=": passes = value >= threshold
+			_:
+				push_warning("PersonalityHandler: unknown comparator '%s'" % comparator)
+				passes = false
+		if not passes:
+			return false
+	return true
