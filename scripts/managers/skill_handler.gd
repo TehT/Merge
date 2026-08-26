@@ -11,14 +11,21 @@ extends RefCounted
 ## How many skills at what minimum rank are needed to reach each
 ## Proficiency rank (array index + 1). e.g. index 0 says Proficiency rank 1
 ## needs at least 1 skill at rank >= 1; higher ranks need more skills at
-## higher minimum ranks.
+## higher minimum ranks. This is a mechanic-scope table, not a reflection
+## of the current content — the 3 skills per category on disk today are
+## just a starting mundane baseline (more will be added, and Awakened
+## categories aren't built yet), so tiers up to min_skills 5 stay here
+## even though nothing can reach them yet; a category short of a tier's
+## min_skills simply can't progress past the previous tier
+## (ranks.size() < min_skills breaks the walk) until it grows enough
+## skills, same as any agent short of a tier's min_rank.
 const RANK_THRESHOLDS: Array[Dictionary] = [
 	{"min_skills": 1, "min_rank": 1},
 	{"min_skills": 1, "min_rank": 2},
 	{"min_skills": 2, "min_rank": 2},
 	{"min_skills": 2, "min_rank": 3},
 	{"min_skills": 3, "min_rank": 3},
-	{"min_skills": 3, "min_rank": 4},
+	{"min_skills": 2, "min_rank": 4},
 	{"min_skills": 3, "min_rank": 4},
 	{"min_skills": 4, "min_rank": 4},
 	{"min_skills": 4, "min_rank": 5},
