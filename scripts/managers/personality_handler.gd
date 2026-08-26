@@ -2,11 +2,12 @@ class_name PersonalityHandler
 extends RefCounted
 ## PersonalityHandler — the Personality Matrix's table-driven computation,
 ## parallel to SkillHandler: static, no persistent state. Owns the five
-## axis keys/pole names, the Archetype naming tables, and the live
-## Archetype-readout derivation. See concurrence_agent_design_merged.md §3
-## for the design this implements — only the core matrix (axes + Archetype
-## + a callable drift primitive); Quirks/Backgrounds/Crucibles (§4) are a
-## separate, larger, not-yet-built system.
+## axis keys/pole names, the Archetype cascade/naming, and the two-tier
+## Drift API (apply_crucible_shock/apply_organic_drift) that other systems
+## hook into. See concurrence_agent_design_merged.md §3 for the design
+## this implements — no trigger calls the Drift API yet (no Crucible/
+## mission-type-nudge system is built); Quirks/Backgrounds/Crucibles (§4)
+## are a separate, larger, not-yet-built system.
 
 const AXIS_KEYS: PackedStringArray = ["protocol", "nerve", "attachment", "esoterica", "ego"]
 
@@ -99,6 +100,25 @@ static func compute_archetype(agent: AgentData) -> String:
 
 	var pole: String = "high" if values[top_axis] > 50 else "low"
 	return BASE_TITLES[top_axis][pole]
+
+
+## Crucible shock (§3.4, tier 1): a permanent, sudden shift from a
+## specific traumatic/formative event — one or two axes at once, doc-
+## recommended magnitude ±15-30. `shifts` is {axis_key: delta}; nothing
+## calls this yet (no Crucible system is built), but it's the entry point
+## that one should hook into once specific triggers exist.
+static func apply_crucible_shock(agent: AgentData, shifts: Dictionary) -> void:
+	for axis_key: String in shifts:
+		agent.drift_axis(axis_key, shifts[axis_key])
+
+
+## Organic drift (§3.4, tier 2): a gradual, small per-mission nudge from
+## repeated exposure to a mission type (doc example: +2-3 per mission on
+## the relevant axis). Single axis, one call per trigger. No decay-back-
+## toward-baseline yet — the doc frames that as future Rest/R&R scope,
+## not needed now.
+static func apply_organic_drift(agent: AgentData, axis_key: String, delta: int) -> void:
+	agent.drift_axis(axis_key, delta)
 
 
 static func _matches(conditions: Array, values: Dictionary) -> bool:

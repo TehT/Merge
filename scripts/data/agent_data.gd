@@ -193,9 +193,10 @@ func get_archetype() -> String:
 	return PersonalityHandler.compute_archetype(self)
 
 ## Nudges one personality axis by delta (+/-), clamped to 0-100. The
-## callable primitive behind both Drift tiers (design doc §3.4) — Crucible
-## shocks (large, one-shot) and organic drift (small, repeated) — though
-## no trigger calls this yet; that's future work.
+## primitive behind both Drift tiers (design doc §3.4) — callers should
+## generally go through PersonalityHandler.apply_crucible_shock()/
+## apply_organic_drift() instead of calling this directly, since those
+## are the documented, tier-labeled entry points other systems hook into.
 func drift_axis(axis_key: String, delta: int) -> void:
 	match axis_key:
 		"protocol": protocol = clampi(protocol + delta, 0, 100)
