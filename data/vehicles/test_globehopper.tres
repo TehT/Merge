@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="VehicleData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/vehicle_data.gd" id="1_globehopper"]
+
+[resource]
+script = ExtResource("1_globehopper")
+vehicle_name = "GlobeHopper (DEBUG)"
+role = 1
+description = "Debug-only ultra-long-range Transport — meant purely for stress-testing routing across the antimeridian and over the poles without first building a real Pacific/Arctic relay chain. Not intended for release."
+speed_kmh = 6000.0
+max_range_km = 40000.0
+capacity = 8

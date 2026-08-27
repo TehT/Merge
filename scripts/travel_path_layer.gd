@@ -16,6 +16,13 @@ extends Node3D
 
 const SEGMENT_COUNT := 40
 const LINE_SURFACE_OFFSET := 1.01
+## How far in front of the flat plane (toward the camera, i.e. more
+## negative Z since the flat-mode camera sits at -Z looking toward +Z)
+## the line and dot sit. Without this the geometry would land AT the
+## plane's z, get z-fought/occluded by it, and read as invisible on
+## the flat map — the sphere-mode analog is LINE_SURFACE_OFFSET, which
+## does the same job multiplicatively.
+const LINE_FLAT_OFFSET := 0.01
 const LINE_COLOR := Color(0.45, 0.75, 1.0, 0.85)
 const DOT_COLOR := Color(1.0, 1.0, 1.0, 1.0)
 const DOT_RADIUS := 0.022
@@ -107,23 +114,42 @@ func _update_path(team: TeamData, entry: Dictionary) -> void:
 
 	var origin_sphere := SurfaceMarker.latlon_to_position(origin.y, origin.x, 1.0)
 	var dest_sphere := SurfaceMarker.latlon_to_position(dest.y, dest.x, 1.0)
-	var origin_flat := SurfaceMarker.latlon_to_flat_position(origin.y, origin.x)
-	var dest_flat := SurfaceMarker.latlon_to_flat_position(dest.y, dest.x)
 
 	var im := ImmediateMesh.new()
 	im.surface_begin(Mesh.PRIMITIVE_LINE_STRIP)
+	var prev_point := Vector3.INF
 	for i in range(SEGMENT_COUNT + 1):
 		var t := float(i) / float(SEGMENT_COUNT)
-		im.surface_add_vertex(_sample_point(origin_sphere, dest_sphere, origin_flat, dest_flat, t))
+		var point := _sample_point(origin_sphere, dest_sphere, t)
+		# When the great circle crosses the antimeridian on the flat map,
+		# consecutive samples' x jumps from about -π to about +π (or vice
+		# versa) — a straight line between them would draw across the
+		# entire map rather than wrapping at the edge. Split the line
+		# strip at that jump so it renders as two segments hitting the
+		# ±π edges instead. Only relevant while flat (in sphere mode the
+		# geodesic is a continuous arc through the sphere, no wrap).
+		if flatten > 0.5 and prev_point.x != INF:
+			if absf(point.x - prev_point.x) > PI:
+				im.surface_end()
+				im.surface_begin(Mesh.PRIMITIVE_LINE_STRIP)
+		im.surface_add_vertex(point)
+		prev_point = point
 	im.surface_end()
 	(entry.line as MeshInstance3D).mesh = im
 
 	(entry.dot as MeshInstance3D).position = _sample_point(
-			origin_sphere, dest_sphere, origin_flat, dest_flat, progress)
+			origin_sphere, dest_sphere, progress)
 
 
-func _sample_point(origin_sphere: Vector3, dest_sphere: Vector3,
-		origin_flat: Vector3, dest_flat: Vector3, t: float) -> Vector3:
-	var sphere_pos := origin_sphere.slerp(dest_sphere, t) * LINE_SURFACE_OFFSET
-	var flat_pos := origin_flat.lerp(dest_flat, t)
+func _sample_point(origin_sphere: Vector3, dest_sphere: Vector3, t: float) -> Vector3:
+	# Sample on the sphere first (great-circle interpolation via slerp),
+	# then project that sample down to flat — that way a polar path
+	# actually curves through higher latitudes on the flat map instead
+	# of being a straight linear-lerp between the two flat endpoints,
+	# and an antimeridian crossing produces the u-jump the strip
+	# splitter above expects.
+	var sphere_sample := origin_sphere.slerp(dest_sphere, t)
+	var sphere_pos := sphere_sample * LINE_SURFACE_OFFSET
+	var flat_pos := SurfaceMarker.sphere_to_flat_position(sphere_sample)
+	flat_pos.z -= LINE_FLAT_OFFSET  # sit fractionally in front of the plane
 	return sphere_pos.lerp(flat_pos, flatten)

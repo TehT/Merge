@@ -92,10 +92,16 @@ static func latlon_to_position(lat_deg: float, lon_deg: float, radius: float = 1
 	return Vector3(sin(u * TAU) * w, cos(phi), cos(u * TAU) * w) * radius
 
 
-## Flat-plane counterpart to latlon_to_position(), using the exact same u/v
-## formula and the exact same PLANE_HALF_WIDTH/HEIGHT constants as the
-## flatten unfold in geoscape.gdshader's vertex(). Must be kept in sync
-## with that shader or markers will land off the coastlines.
+## Flat-plane counterpart to latlon_to_position(), matching where the
+## sphere-unroll shader (and _reposition()'s stage-2 math) actually
+## places a lat/lon at flatten=1. Returned position sits ON the plane —
+## callers that need to render slightly above it (e.g. TravelPathLayer,
+## so a line doesn't z-fight the map surface) apply their own small
+## offset toward the camera. Kept in sync with _reposition()'s stage-2
+## output: x is negated relative to the raw u-space width because the
+## cylinder unroll direction is -sin(theta), and z sits at
+## -SURFACE_OFFSET because the unrolled plane translates back that
+## distance to land at the origin's projected surface.
 const PLANE_HALF_WIDTH := PI
 const PLANE_HALF_HEIGHT := PI / 2.0
 
@@ -103,9 +109,29 @@ static func latlon_to_flat_position(lat_deg: float, lon_deg: float) -> Vector3:
 	var u := lon_deg / 360.0 + 0.5
 	var v := 0.5 - lat_deg / 180.0
 	return Vector3(
-		(u - 0.5) * 2.0 * PLANE_HALF_WIDTH,
+		-(u - 0.5) * 2.0 * PLANE_HALF_WIDTH,
 		(0.5 - v) * 2.0 * PLANE_HALF_HEIGHT,
-		0.0
+		-SURFACE_OFFSET
+	)
+
+
+## Inverse projection: takes a point on the unit sphere and returns the
+## equirectangular flat position (matching latlon_to_flat_position).
+## Used by TravelPathLayer so it can sample great-circle intermediate
+## points on the sphere and project each to flat — that way a polar
+## path curves toward the pole on the flat map (rather than a straight
+## line between endpoints missing the curve), and an antimeridian
+## crossing wraps at the map edge (with TravelPathLayer detecting the u
+## discontinuity and splitting the line strip there).
+static func sphere_to_flat_position(sphere_pos: Vector3) -> Vector3:
+	var v := acos(clampf(sphere_pos.y, -1.0, 1.0)) / PI
+	# u ∈ [0, 1] with lon=-180° → u=0 → theta=0, lon=0° → u=0.5 → theta=π.
+	# fposmod wraps atan2's [-π, π] range into u's [0, 1].
+	var u := fposmod(atan2(sphere_pos.x, sphere_pos.z) / TAU, 1.0)
+	return Vector3(
+		-(u - 0.5) * 2.0 * PLANE_HALF_WIDTH,
+		(0.5 - v) * 2.0 * PLANE_HALF_HEIGHT,
+		-SURFACE_OFFSET
 	)
 
 

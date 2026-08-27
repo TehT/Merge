@@ -15,11 +15,11 @@ func _ready() -> void:
 	$RightSidebar/Layout/RightTabIcons/RightToggle.pressed.connect(_toggle_right)
 	%EventLogToggle.pressed.connect(func() -> void: Game.left_popout.toggle_showing("event_log"))
 
-	%SquadsIcon.pressed.connect(func() -> void: Game.right_primary.set_active_tab("squads"))
-	%EventsIcon.pressed.connect(func() -> void: Game.right_primary.set_active_tab("events"))
-	%ResearchIcon.pressed.connect(func() -> void: Game.right_primary.set_active_tab("research"))
-	%EquipmentIcon.pressed.connect(func() -> void: Game.right_primary.set_active_tab("equipment"))
-	%BasesIcon.pressed.connect(func() -> void: Game.right_primary.set_active_tab("bases"))
+	%SquadsIcon.pressed.connect(_activate_right_tab.bind("squads"))
+	%EventsIcon.pressed.connect(_activate_right_tab.bind("events"))
+	%ResearchIcon.pressed.connect(_activate_right_tab.bind("research"))
+	%EquipmentIcon.pressed.connect(_activate_right_tab.bind("equipment"))
+	%BasesIcon.pressed.connect(_activate_right_tab.bind("bases"))
 
 	%SquadList.agent_selected.connect(_on_agent_selected)
 	%SquadList.team_selected.connect(_on_team_selected)
@@ -109,6 +109,21 @@ func open_left() -> void:
 	if not _left_open:
 		_left_open = true
 		_apply_left(true)
+
+
+func open_right() -> void:
+	if not _right_open:
+		_right_open = true
+		_apply_right(true)
+
+
+## Switches the right sidebar to the given tab and slides the sidebar
+## open if it was collapsed — clicking a tab icon while collapsed
+## should reveal the content, not just silently change which tab is
+## active behind the closed panel.
+func _activate_right_tab(tab_id: String) -> void:
+	Game.right_primary.set_active_tab(tab_id)
+	open_right()
 
 
 func _toggle_left() -> void:

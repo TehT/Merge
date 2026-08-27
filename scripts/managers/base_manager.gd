@@ -24,6 +24,19 @@ class_name BaseManager
 ## own local_equipment. Empty by default; populate via the Inspector.
 @export var global_equipment: Array[EquipmentData] = []
 
+## Adds four temporary bases arranged specifically to stress-test the
+## great-circle routing across geographic edge cases: two in Oceania
+## bracketing the antimeridian (Suva ↔ Apia is a ~1200km hop the router
+## should send across ±180° rather than the long way through 0°), and
+## two in the high Arctic bracketing the pole (Svalbard ↔ Alert is a
+## ~1250km hop the router should send over the pole rather than around
+## it). Each also comes with a C-130J-A copy so the router has an
+## actual TRANSPORT to use, and HQ gets a debug ultra-long-range
+## GlobeHopper so a team based in Berlin can actually reach these test
+## bases via a single relay hop without needing an intermediate real
+## base built first. Off by default.
+@export var spawn_stress_test_bases: bool = true
+
 ## Fires whenever transfer_equipment() actually moves something, so
 ## location-aware UI (EquipmentTab) knows to redraw.
 signal equipment_changed()
@@ -33,6 +46,8 @@ func _ready() -> void:
 	if bases.is_empty():
 		bases.append(_create_hq())
 		bases.append(_create_east_coast_base())
+		if spawn_stress_test_bases:
+			_add_stress_test_bases()
 
 func _create_hq() -> BaseData:
 	var hq := BaseData.new().setup("HQ (Berlin, Germany)", Vector2(13.405, 52.52))
@@ -60,6 +75,54 @@ func _create_east_coast_base() -> BaseData:
 		preload("res://data/vehicles/c130j_a.tres"),
 	]
 	return base
+
+
+## Two paired test bases on either side of the antimeridian and two on
+## either side of the north pole — see the doc comment on
+## spawn_stress_test_bases above for exactly what these are testing.
+## Also drops the debug GlobeHopper into HQ so Berlin can actually
+## reach any of them in one relay hop for testing.
+func _add_stress_test_bases() -> void:
+	# Antimeridian pair: Suva and Apia sit ~1180km apart across the date
+	# line — the router should pick the short crossing (±180°), not the
+	# long way around through 0°.
+	var suva := BaseData.new().setup("TEST — Suva (Fiji)", Vector2(178.4, -18.1))
+	suva.vehicles = [
+		preload("res://data/vehicles/eurocopter_h225.tres").duplicate(),
+		preload("res://data/vehicles/c130j_a.tres").duplicate(),
+	]
+	bases.append(suva)
+
+	var apia := BaseData.new().setup("TEST — Apia (Samoa)", Vector2(-171.75, -13.8))
+	apia.vehicles = [
+		preload("res://data/vehicles/eurocopter_h225.tres").duplicate(),
+		preload("res://data/vehicles/c130j_a.tres").duplicate(),
+	]
+	bases.append(apia)
+
+	# Polar pair: Svalbard and Alert sit ~1250km apart with the pole
+	# between them — the router should pick the polar crossing, not a
+	# ~15000km trip around the Arctic Circle.
+	var svalbard := BaseData.new().setup("TEST — Longyearbyen (Svalbard)", Vector2(15.6, 78.2))
+	svalbard.vehicles = [
+		preload("res://data/vehicles/eurocopter_h225.tres").duplicate(),
+		preload("res://data/vehicles/c130j_a.tres").duplicate(),
+	]
+	bases.append(svalbard)
+
+	var alert := BaseData.new().setup("TEST — Alert (Nunavut)", Vector2(-62.3, 82.5))
+	alert.vehicles = [
+		preload("res://data/vehicles/eurocopter_h225.tres").duplicate(),
+		preload("res://data/vehicles/c130j_a.tres").duplicate(),
+	]
+	bases.append(alert)
+
+	# Give HQ a debug ultra-long-range Transport so Berlin can reach any
+	# of the four test bases in a single relay hop for testing, without
+	# first having to build a real Pacific or Arctic base to hop
+	# through. Delete this + the flag once stress testing is done.
+	var hopper: VehicleData = preload("res://data/vehicles/test_globehopper.tres").duplicate()
+	bases[0].vehicles.append(hopper)
 
 ## The base new teams start at and travel returns to. Single-base stand-in
 ## for a real per-team home base — see class comment.
