@@ -109,8 +109,12 @@ func location_at(day: float) -> Vector2:
 	var to_sphere := SurfaceMarker.latlon_to_position(
 			travel_destination.y, travel_destination.x, 1.0)
 	var pos := from_sphere.slerp(to_sphere, t)
+	# latlon_to_position uses u*TAU = lon_rad + π (from u = lon/360 + 0.5),
+	# so atan2(x, z) returns lon_rad + π wrapped into [-π, π]. Reverse
+	# that shift and wrap the result back into [-180, 180]° or the
+	# marker jumps to the antipode of the intended point on frame 1.
 	var lat := rad_to_deg(asin(clampf(pos.y, -1.0, 1.0)))
-	var lon := rad_to_deg(atan2(pos.x, pos.z))
+	var lon := wrapf(rad_to_deg(atan2(pos.x, pos.z)) - 180.0, -180.0, 180.0)
 	return Vector2(lon, lat)
 
 

@@ -18,3 +18,4 @@ var right_primary: PanelHost
 var right_popout: PanelHost
 var mission_choice_dialog: MissionChoiceDialog
 var root_ui: RootUI
+var ship_relocate_overlay: ShipRelocateOverlay

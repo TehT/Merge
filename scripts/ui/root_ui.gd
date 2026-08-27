@@ -14,6 +14,8 @@ func _ready() -> void:
 	%DetailPanel/LeftToggle.pressed.connect(_toggle_left)
 	$RightSidebar/Layout/RightTabIcons/RightToggle.pressed.connect(_toggle_right)
 	%EventLogToggle.pressed.connect(func() -> void: Game.left_popout.toggle_showing("event_log"))
+	%RangeCircleToggle.pressed.connect(_on_range_circle_toggle)
+	%TravelPathLayer.get_parent().get_node("RangeCircleLayer").mode_changed.connect(_update_range_circle_toggle_icon)
 
 	%SquadsIcon.pressed.connect(_activate_right_tab.bind("squads"))
 	%EventsIcon.pressed.connect(_activate_right_tab.bind("events"))
@@ -101,6 +103,26 @@ func _on_base_selected(base: BaseData) -> void:
 func _on_event_selected(ev: EventData) -> void:
 	Game.left_detail.show_view("event", ev)
 	open_left()
+
+
+## Cycle the range-circle layer through its three modes and update
+## the toggle button's icon + tooltip to reflect what state it's in.
+func _on_range_circle_toggle() -> void:
+	var layer := %TravelPathLayer.get_parent().get_node("RangeCircleLayer") as RangeCircleLayer
+	layer.cycle_mode()
+
+
+func _update_range_circle_toggle_icon(mode: RangeCircleLayer.Mode) -> void:
+	match mode:
+		RangeCircleLayer.Mode.ALL:
+			%RangeCircleToggle.text = "◎"
+			%RangeCircleToggle.tooltip_text = "Range circles: all"
+		RangeCircleLayer.Mode.SELECTED_ONLY:
+			%RangeCircleToggle.text = "◉"
+			%RangeCircleToggle.tooltip_text = "Range circles: selected only"
+		_:
+			%RangeCircleToggle.text = "○"
+			%RangeCircleToggle.tooltip_text = "Range circles: off"
 
 
 ## Public (unlike _toggle_left/_apply_left) — called from anywhere that

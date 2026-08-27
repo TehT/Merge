@@ -173,6 +173,10 @@ func get_current_view_id() -> String:
 	return _current_view_id
 
 
+func get_current_view_data() -> Variant:
+	return _current_view_data
+
+
 ## Re-mounts the current view with the same data. Called by external
 ## coordinators (root_ui.gd) when a manager signal indicates the view's
 ## backing data has changed and its rendered content is now stale.

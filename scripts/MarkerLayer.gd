@@ -233,6 +233,11 @@ func clear_selection() -> void:
 
 
 func _on_globe_clicked(screen_pos: Vector2) -> void:
+	# ShipRelocateOverlay owns clicks while a course is being chosen —
+	# skip our own marker picking so clicking the ocean to set the
+	# ship's destination doesn't also open some marker's detail sheet.
+	if Game.ship_relocate_overlay and Game.ship_relocate_overlay.is_picking():
+		return
 	var hit := _pick_marker(screen_pos, pick_radius_px)
 	select(hit) # null clears
 	if hit and hit.data.has("event_id"):

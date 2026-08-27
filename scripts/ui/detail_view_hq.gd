@@ -55,12 +55,7 @@ func _apply_mobility(base: BaseData) -> void:
 		%Status.text = ""
 		%RelocateBtn.disabled = false
 		%RelocateBtn.pressed.connect(func() -> void:
-				# Placeholder destination — sail 20° east of current
-				# position. Any open water works for testing the
-				# movement path. Real picker replaces this next commit.
-				var dest := Vector2(base.location.x + 20.0, base.location.y)
-				Game.base_manager.begin_base_relocation(base, dest,
-						"debug target (+20° east)"))
+				Game.ship_relocate_overlay.start_picking(base))
 
 
 func _fill_vehicles(vehicles: Array[VehicleData], base_id: String) -> void:

@@ -126,7 +126,11 @@ func _create_east_coast_base() -> BaseData:
 func _create_falkor_too() -> BaseData:
 	var ship := BaseData.new().setup("RV Falkor Too", Vector2(-160.0, -5.0))
 	ship.is_mobile = true
-	ship.cruise_speed_kmh = 18.52
+	# Bumped from the realistic 18.52 (10 knots) to 50 km/h so voyages
+	# are watchable in a normal play session — a Pacific crossing at
+	# 10 knots is 6+ real hours even with the current 4x time scale.
+	# Adjust back down when we care more about realism than watchability.
+	ship.cruise_speed_kmh = 50.0
 	ship.has_helipad = true
 	ship.has_airfield = false
 	ship.vehicles = [

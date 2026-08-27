@@ -344,21 +344,31 @@ func _update_vehicle_path(path: Dictionary) -> void:
 	(path.dot as MeshInstance3D).position = _sample_point(origin_sphere, dest_sphere, progress)
 
 
-## Ship relocation path — line runs from the departure port to the
-## destination for the whole trip (unlike team/vehicle paths, ships
-## don't hop between endpoints; there's no intermediate leg switching
-## to reveal). Dot sits at the destination as a target marker.
+## Ship relocation path — line runs from the ship's CURRENT position
+## (t = progress along the great circle) to the destination (t = 1),
+## eating the path as the ship goes so only the remaining course is
+## drawn. Dot sits at the destination as a target marker; the ship's
+## own map marker already sits at t = progress (see
+## MarkerLayer._on_base_moved), which is where this line starts.
 func _update_ship_path(base: BaseData, path: Dictionary) -> void:
 	var origin_sphere := SurfaceMarker.latlon_to_position(
 			base.travel_from_location.y, base.travel_from_location.x, 1.0)
 	var dest_sphere := SurfaceMarker.latlon_to_position(
 			base.travel_destination.y, base.travel_destination.x, 1.0)
 
+	var total_days := maxf(0.001, base.travel_arrival_day - base.travel_departure_day)
+	var now: float = Game.game_clock.get_current_time_days()
+	var progress := clampf((now - base.travel_departure_day) / total_days, 0.0, 1.0)
+
 	var im := ImmediateMesh.new()
 	im.surface_begin(Mesh.PRIMITIVE_LINE_STRIP)
 	var prev_point := Vector3.INF
+	# Interpolate segments across the REMAINING arc — t = progress at
+	# i=0, t = 1 at i=SEGMENT_COUNT. Once progress hits 1 the strip
+	# collapses to a single point at the destination (harmless — the
+	# path removes itself on base_relocation_completed anyway).
 	for i in range(SEGMENT_COUNT + 1):
-		var t := float(i) / float(SEGMENT_COUNT)
+		var t := progress + (1.0 - progress) * float(i) / float(SEGMENT_COUNT)
 		var point := _sample_point(origin_sphere, dest_sphere, t)
 		if flatten > 0.5 and prev_point.x != INF:
 			if absf(point.x - prev_point.x) > PI:
@@ -378,6 +388,11 @@ func _update_ship_path(base: BaseData, path: Dictionary) -> void:
 ## dot hidden behind the globe doesn't get selected through it. In
 ## flat mode there's no far side so the far-side check is skipped.
 func _on_globe_clicked(screen_pos: Vector2) -> void:
+	# Same as MarkerLayer — hand clicks to ShipRelocateOverlay when a
+	# course is being picked, so clicking near a team's travel dot
+	# doesn't also try to open the team detail mid-pick.
+	if Game.ship_relocate_overlay and Game.ship_relocate_overlay.is_picking():
+		return
 	if _camera == null or _paths.is_empty():
 		return
 

@@ -5,6 +5,7 @@
 [ext_resource type="Script" uid="uid://cufqajs50eafm" path="res://scripts/game.gd" id="2_pnhog"]
 [ext_resource type="Script" uid="uid://b7qbvm2gc4stk" path="res://scripts/GeoData.gd" id="2_vcsgt"]
 [ext_resource type="Script" uid="uid://1yhhbyhfvtyh" path="res://scripts/MarkerLayer.gd" id="3_0bbpv"]
+[ext_resource type="Script" uid="uid://bikge5tvb3002" path="res://scripts/range_circle_layer.gd" id="range_circle_layer"]
 [ext_resource type="Script" uid="uid://belv085q36hey" path="res://scripts/WeatherController.gd" id="4_rarhs"]
 [ext_resource type="Script" uid="uid://dw8aense1sjk4" path="res://scripts/debug/debug_driver.gd" id="5_debugdriver"]
 [ext_resource type="Script" uid="uid://dhu583nqo1jvy" path="res://scripts/managers/game_clock.gd" id="6_gameclock"]
@@ -44,6 +45,7 @@
 [ext_resource type="Script" uid="uid://d1ppro81a3mt0" path="res://scripts/ui/equipment_tab.gd" id="21_equipmenttab"]
 [ext_resource type="Script" uid="uid://bj538xi1vtr46" path="res://scripts/managers/base_manager.gd" id="22_basemanager"]
 [ext_resource type="Script" uid="uid://drg2k66cmj2ix" path="res://scripts/ui/mission_choice_dialog.gd" id="23_missionchoicedialog"]
+[ext_resource type="PackedScene" path="res://scenes/ui/ship_relocate_overlay.tscn" id="ship_relocate_overlay"]
 [ext_resource type="Script" uid="uid://ccpg4t1tynq76" path="res://scripts/managers/event_log.gd" id="24_eventlog"]
 [ext_resource type="Script" uid="uid://k3u0nglcx1qi" path="res://scripts/managers/hiring_manager.gd" id="25_hiringmanager"]
 [ext_resource type="Script" uid="uid://bcxeltuttyx1e" path="res://scripts/ui/panel_host.gd" id="27_rightslideout"]
@@ -144,6 +146,9 @@ script = ExtResource("3_0bbpv")
 [node name="TravelPathLayer" type="Node3D" parent="Globe" unique_id=2057643536]
 unique_name_in_owner = true
 script = ExtResource("20_travelpathlayer")
+
+[node name="RangeCircleLayer" type="Node3D" parent="Globe"]
+script = ExtResource("range_circle_layer")
 
 [node name="Camera3D" type="Camera3D" parent="." unique_id=2051545007]
 unique_name_in_owner = true
@@ -385,6 +390,13 @@ tooltip_text = "Event Log"
 focus_mode = 0
 text = "☰"
 
+[node name="RangeCircleToggle" type="Button" parent="UI/Root/LeftSidebar/HBoxContainer/DetailPanel"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Range circles: all"
+focus_mode = 0
+text = "◎"
+
 [node name="RightSidebar" type="PanelContainer" parent="UI/Root" unique_id=1659837075]
 custom_minimum_size = Vector2(320, 0)
 custom_maximum_size = Vector2(320, -1)
@@ -568,3 +580,6 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("23_missionchoicedialog")
+
+[node name="ShipRelocateOverlay" parent="UI/Root" instance=ExtResource("ship_relocate_overlay")]
+unique_name_in_owner = true

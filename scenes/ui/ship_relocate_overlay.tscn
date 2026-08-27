@@ -1,0 +1,84 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" uid="uid://du7pi66kylkhc" path="res://scripts/ui/ship_relocate_overlay.gd" id="script"]
+
+[sub_resource type="StyleBoxFlat" id="banner_style"]
+content_margin_left = 14.0
+content_margin_top = 10.0
+content_margin_right = 14.0
+content_margin_bottom = 10.0
+bg_color = Color(0.08, 0.09, 0.12, 0.95)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.4, 0.85, 0.75, 1)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+
+[node name="ShipRelocateOverlay" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("script")
+
+[node name="Banner" type="PanelContainer" parent="."]
+layout_mode = 1
+anchors_preset = 7
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -240.0
+offset_top = -110.0
+offset_right = 240.0
+offset_bottom = -20.0
+grow_horizontal = 2
+grow_vertical = 0
+theme_override_styles/panel = SubResource("banner_style")
+
+[node name="VBox" type="VBoxContainer" parent="Banner"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="Instruction" type="Label" parent="Banner/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.4, 0.85, 0.75, 1)
+theme_override_font_sizes/font_size = 14
+text = "Click on the ocean to set course"
+horizontal_alignment = 1
+
+[node name="Info" type="Label" parent="Banner/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.65, 0.65, 0.7, 1)
+theme_override_font_sizes/font_size = 12
+text = "No destination picked."
+horizontal_alignment = 1
+
+[node name="Buttons" type="HBoxContainer" parent="Banner/VBox"]
+layout_mode = 2
+alignment = 1
+theme_override_constants/separation = 12
+
+[node name="SetCourseBtn" type="Button" parent="Banner/VBox/Buttons"]
+unique_name_in_owner = true
+layout_mode = 2
+focus_mode = 0
+mouse_default_cursor_shape = 2
+disabled = true
+text = "Set Course"
+
+[node name="CancelBtn" type="Button" parent="Banner/VBox/Buttons"]
+unique_name_in_owner = true
+layout_mode = 2
+focus_mode = 0
+mouse_default_cursor_shape = 2
+text = "Cancel"
