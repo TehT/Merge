@@ -41,11 +41,50 @@ class_name BaseManager
 ## location-aware UI (EquipmentTab) knows to redraw.
 signal equipment_changed()
 
+## Fires whenever any base's `vehicles` array changes — either a
+## begin_vehicle_transfer() departure (vehicle removed from source)
+## or a transit-arrival (vehicle added to destination). Kept separate
+## from equipment_changed since neither triggers the other, and their
+## listeners are different views. Fired for team pickups/releases too
+## via TeamManager, if you extend those to emit it.
+signal vehicles_changed()
+
+## Fired when a vehicle-only transfer actually starts (source removed,
+## in_transit_vehicles appended) so log/UI can react to the departure
+## specifically, distinct from the generic vehicles_changed.
+signal vehicle_transfer_started(vehicle: VehicleData, from_base_id: String, to_base_id: String, arrival_day: float)
+
+## Fired when a vehicle-only transfer's arrival day is reached and the
+## vehicle lands in the destination base's fleet.
+signal vehicle_transfer_completed(vehicle: VehicleData, to_base_id: String)
+
+## Fired when a mobile base sets sail for a new location — kicks off
+## the visualization (TravelPathLayer draws the base's own path) and
+## event log entry.
+signal base_relocation_started(base: BaseData)
+
+## Fired when a mobile base arrives at its target — same as
+## _started but on completion.
+signal base_relocation_completed(base: BaseData)
+
+## Fired every frame that a mobile base's `location` changes while
+## relocating — MarkerLayer subscribes so the base's map marker
+## follows the ship rather than staying frozen at the departure port.
+signal base_moved(base: BaseData)
+
+## Vehicles currently ferrying themselves between bases without a team
+## on board — each entry is {vehicle, from_base_id, to_base_id,
+## departure_day, arrival_day, distance_km, travel_hours}. Separate
+## from any team's `current_vehicle` (which represents in-transit
+## possession by a squad); this list is empty-cabin logistics only.
+var in_transit_vehicles: Array[Dictionary] = []
+
 func _ready() -> void:
 	Game.base_manager = self
 	if bases.is_empty():
 		bases.append(_create_hq())
 		bases.append(_create_east_coast_base())
+		bases.append(_create_falkor_too())
 		if spawn_stress_test_bases:
 			_add_stress_test_bases()
 
@@ -75,6 +114,25 @@ func _create_east_coast_base() -> BaseData:
 		preload("res://data/vehicles/c130j_a.tres"),
 	]
 	return base
+
+
+## Research vessel "Falkor Too" — first mobile base. Starts in
+## international waters between Hawaii and the Line Islands. Ships at
+## ~10 knots (18.52 km/h — midpoint of the real Falkor's 8.5kt cruise
+## and 13kt top speed, matching what the player asked for). Has a
+## helipad, no airfield — helicopters can land/refuel here, planes
+## can't. Starting fleet is one Eurocopter, which sails with the ship
+## as base.vehicles moves with base.
+func _create_falkor_too() -> BaseData:
+	var ship := BaseData.new().setup("RV Falkor Too", Vector2(-160.0, -5.0))
+	ship.is_mobile = true
+	ship.cruise_speed_kmh = 18.52
+	ship.has_helipad = true
+	ship.has_airfield = false
+	ship.vehicles = [
+		preload("res://data/vehicles/eurocopter_h225.tres").duplicate(),
+	]
+	return ship
 
 
 ## Two paired test bases on either side of the antimeridian and two on
@@ -187,6 +245,137 @@ func transfer_equipment(item: EquipmentData, from_base_id: String, to_base_id: S
 	to_list.append(item)
 	equipment_changed.emit()
 	return true
+
+## Kicks off an empty-cabin ferry of `vehicle` from one base's fleet
+## to another. Unlike transfer_equipment (instant logistics stand-in),
+## a vehicle transfer takes real travel time — the vehicle leaves the
+## source base immediately (removed from its `vehicles`), sits in
+## in_transit_vehicles for compute_travel_hours() hours, and lands in
+## the destination base's `vehicles` at arrival_day. Refuses if:
+##  - from and to are the same base
+##  - the vehicle isn't currently at from_base (someone else has it —
+##    a team currently in transit erases it from its base's fleet via
+##    TeamManager's possession model, or it's already ferrying itself)
+##  - the vehicle's max_range_km can't cover the great-circle distance
+## Returns the transit entry on success (matching in_transit_vehicles'
+## shape so the caller can display the arrival time), or {} on
+## failure so the caller can distinguish success without re-checking
+## every condition.
+func begin_vehicle_transfer(vehicle: VehicleData, from_base_id: String, to_base_id: String) -> Dictionary:
+	if from_base_id == to_base_id:
+		return {}
+	var from_base := get_base_by_id(from_base_id)
+	var to_base := get_base_by_id(to_base_id)
+	if from_base == null or to_base == null:
+		return {}
+
+	var idx: int = from_base.vehicles.find(vehicle)
+	if idx == -1:
+		return {}
+
+	var distance := GeoData.haversine_km(from_base.location.y, from_base.location.x,
+			to_base.location.y, to_base.location.x)
+	if not vehicle.can_reach(distance):
+		return {}
+
+	var travel_hours := vehicle.compute_travel_hours(distance)
+	var now: float = Game.game_clock.get_current_time_days()
+	var arrival_day := now + travel_hours / 24.0
+
+	from_base.vehicles.remove_at(idx)
+	var entry := {
+		"vehicle": vehicle,
+		"from_base_id": from_base_id,
+		"to_base_id": to_base_id,
+		"departure_day": now,
+		"arrival_day": arrival_day,
+		"distance_km": distance,
+		"travel_hours": travel_hours,
+	}
+	in_transit_vehicles.append(entry)
+
+	vehicles_changed.emit()
+	vehicle_transfer_started.emit(vehicle, from_base_id, to_base_id, arrival_day)
+	print("[BaseManager] %s ferrying %s → %s (%s)" % [
+			vehicle.vehicle_name, from_base.base_name, to_base.base_name,
+			VehicleData.format_duration(travel_hours)])
+	return entry
+
+
+## Every-frame arrival check — same pattern TeamManager uses for team
+## travel. Iterates back-to-front so removing mid-loop doesn't skip
+## entries. Also advances any mobile base that's currently relocating.
+func _process(_delta: float) -> void:
+	var now: float = Game.game_clock.get_current_time_days()
+
+	for i in range(in_transit_vehicles.size() - 1, -1, -1):
+		var entry: Dictionary = in_transit_vehicles[i]
+		if now >= entry.arrival_day:
+			_complete_vehicle_transfer(i)
+
+	for base: BaseData in bases:
+		if not base.is_relocating:
+			continue
+		if now >= base.travel_arrival_day:
+			_complete_base_relocation(base)
+		else:
+			# Recompute along the great-circle each frame — cheap
+			# (asin + atan2) and matches TravelPathLayer's own slerp
+			# so line + marker stay glued together visually.
+			base.location = base.location_at(now)
+			base_moved.emit(base)
+
+
+func _complete_vehicle_transfer(idx: int) -> void:
+	var entry: Dictionary = in_transit_vehicles[idx]
+	in_transit_vehicles.remove_at(idx)
+	var to_base := get_base_by_id(entry.to_base_id)
+	if to_base != null:
+		to_base.vehicles.append(entry.vehicle)
+	vehicles_changed.emit()
+	vehicle_transfer_completed.emit(entry.vehicle, entry.to_base_id)
+	print("[BaseManager] %s arrived at %s" % [
+			(entry.vehicle as VehicleData).vehicle_name,
+			to_base.base_name if to_base else "?"])
+
+
+## Public entry point for the "click Relocate on a ship's detail
+## sheet" flow. Validates that this base actually can relocate
+## (is_mobile + cruise_speed_kmh > 0), delegates the state setup to
+## BaseData.begin_relocation, fires signals so path visuals and event
+## log kick in. Returns true on success. UI upstream is responsible
+## for the destination-picker (map click on a sea tile).
+func begin_base_relocation(base: BaseData, destination: Vector2, destination_name: String) -> bool:
+	if not base.is_mobile:
+		push_warning("[BaseManager] begin_base_relocation: %s isn't a mobile base." % base.base_name)
+		return false
+	if base.cruise_speed_kmh <= 0.0:
+		push_warning("[BaseManager] begin_base_relocation: %s has no cruise speed set." % base.base_name)
+		return false
+	if base.is_relocating:
+		# For MVP we don't allow retargeting mid-voyage; the ship
+		# finishes its current leg first. The picker UI grays out
+		# Relocate while is_relocating is true, so this is a
+		# double-check rather than a user-facing error path.
+		push_warning("[BaseManager] begin_base_relocation: %s is already underway." % base.base_name)
+		return false
+
+	base.begin_relocation(destination, destination_name, Game.game_clock.get_current_time_days())
+	base_relocation_started.emit(base)
+	print("[BaseManager] %s setting course for %s (%s)" % [
+			base.base_name, destination_name,
+			VehicleData.format_duration((base.travel_arrival_day - base.travel_departure_day) * 24.0)])
+	return true
+
+
+func _complete_base_relocation(base: BaseData) -> void:
+	base.location = base.travel_destination
+	var dest_name := base.travel_destination_name
+	base.complete_relocation()
+	base_moved.emit(base)
+	base_relocation_completed.emit(base)
+	print("[BaseManager] %s moored at %s" % [base.base_name, dest_name])
+
 
 ## Returns the actual Array[EquipmentData] backing one location (by
 ## reference — mutating it mutates the real field), or null if base_id

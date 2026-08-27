@@ -97,6 +97,11 @@ func _ready() -> void:
 		marker.marker_size = 0.09
 		marker.is_base = true
 
+	# Mobile bases move each frame while relocating — sync their
+	# marker's lat/lon to the base's own updated location so the pin
+	# follows the ship rather than staying pinned to the departure port.
+	Game.base_manager.base_moved.connect(_on_base_moved)
+
 	# The whole scene tree (including Game.event_manager) already exists by the
 	# time any node's _ready() runs, so this is always safe regardless of
 	# sibling order.
@@ -165,6 +170,18 @@ func _remove_event_marker(event_id: String) -> void:
 		return
 	unregister_location(event_id)
 	event_marker_removed.emit(event_id)
+
+
+## Follows a mobile base's marker to its current location each time
+## BaseManager advances it (every frame while relocating). Cheap —
+## SurfaceMarker's own setters call _reposition which handles both
+## sphere and flat state.
+func _on_base_moved(base: BaseData) -> void:
+	var marker: SurfaceMarker = _location_markers.get(base.id)
+	if marker == null:
+		return
+	marker.longitude = base.location.x
+	marker.latitude = base.location.y
 
 
 func _find_controller() -> Node:

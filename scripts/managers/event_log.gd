@@ -26,6 +26,10 @@ func _ready() -> void:
 	Game.event_manager.event_resolved.connect(_on_event_resolved)
 	Game.team_manager.team_departed.connect(_on_team_departed)
 	Game.team_manager.team_arrived.connect(_on_team_arrived)
+	Game.base_manager.vehicle_transfer_started.connect(_on_vehicle_transfer_started)
+	Game.base_manager.vehicle_transfer_completed.connect(_on_vehicle_transfer_completed)
+	Game.base_manager.base_relocation_started.connect(_on_base_relocation_started)
+	Game.base_manager.base_relocation_completed.connect(_on_base_relocation_completed)
 
 
 func _on_event_spawned(event: EventData) -> void:
@@ -73,6 +77,32 @@ func _on_team_arrived(team_id: String, event_id: String) -> void:
 		_add("%s returned to %s" % [team.team_name, team.location_name])
 	else:
 		_add("%s arrived at %s" % [team.team_name, team.location_name])
+
+
+## Empty-cabin vehicle ferry between bases (no team on board) — starts
+## when a player clicks Send on the vehicle popout's Relocate section.
+func _on_vehicle_transfer_started(vehicle: VehicleData, from_base_id: String,
+		to_base_id: String, _arrival_day: float) -> void:
+	var from_base := Game.base_manager.get_base_by_id(from_base_id)
+	var to_base := Game.base_manager.get_base_by_id(to_base_id)
+	if from_base == null or to_base == null:
+		return
+	_add("%s ferrying %s → %s" % [vehicle.vehicle_name, from_base.base_name, to_base.base_name])
+
+
+func _on_vehicle_transfer_completed(vehicle: VehicleData, to_base_id: String) -> void:
+	var to_base := Game.base_manager.get_base_by_id(to_base_id)
+	if to_base == null:
+		return
+	_add("%s arrived at %s" % [vehicle.vehicle_name, to_base.base_name])
+
+
+func _on_base_relocation_started(base: BaseData) -> void:
+	_add("%s setting course for %s" % [base.base_name, base.travel_destination_name])
+
+
+func _on_base_relocation_completed(base: BaseData) -> void:
+	_add("%s moored at %s" % [base.base_name, base.travel_destination_name])
 
 
 func _add(text: String) -> void:

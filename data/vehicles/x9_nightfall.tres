@@ -6,6 +6,7 @@
 script = ExtResource("1_x9nightfall")
 vehicle_name = "X-9 'Nightfall'"
 role = 1
+required_facility = 2
 description = "A black-budget hypersonic prototype, built for exactly one job: get a full team from one base to another before anyone notices they left. Base-to-base only — cargo space is razor thin, but it covers Berlin to New York in one hop, faster than anything else in the fleet.
 "
 speed_kmh = 7000.0

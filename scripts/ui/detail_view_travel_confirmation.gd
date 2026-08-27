@@ -29,7 +29,17 @@ func populate(data: Variant, on_close: Callable) -> void:
 	%TravelTimeRow.set_value(VehicleData.format_duration(plan.travel_hours))
 	%ArrivingRow.set_value("Day %d, ~%02d:00" % [int(arrival_time), arrival_hour])
 
-	%CloseButton.pressed.connect(on_close)
+	# Base transport passes the team along in data so Close can route
+	# back to the team's own detail sheet — the user was just looking at
+	# it to open the transport picker, so returning there beats going to
+	# the empty state. Mission deploys don't pass a team, and fall through
+	# to the standard dismiss (empty view).
+	if data.has("team"):
+		var team: TeamData = data["team"]
+		%CloseButton.pressed.connect(func() -> void:
+				Game.left_detail.show_view("team", team))
+	else:
+		%CloseButton.pressed.connect(on_close)
 
 
 func _fill_route(legs: Array) -> void:

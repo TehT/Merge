@@ -56,7 +56,18 @@ static func find_routes(start_location: Vector2, start_name: String,
 			visited[base.id] = true  # never usefully hop back through the start
 			start_available.append_array(base.vehicles)
 
-	_search(start_location, start_name, [], target_location, target_name,
+	# If the target coincides with a known base, that base's facility
+	# set gates whichever vehicle handles the final leg (a helicopter
+	# can only end there if it has a helipad, etc.). Mission-deploy
+	# targets don't coincide with a base and stay null — event
+	# coordinates aren't landing at a facility.
+	var target_base: BaseData = null
+	for base: BaseData in bases:
+		if base.location == target_location:
+			target_base = base
+			break
+
+	_search(start_location, start_name, [], target_location, target_name, target_base,
 			team_size, final_role, bases, visited, 0, start_available, held_vehicle, routes)
 
 	routes.sort_custom(func(a: Array, b: Array) -> bool: return total_hours(a) < total_hours(b))
@@ -66,12 +77,13 @@ static func find_routes(start_location: Vector2, start_name: String,
 
 
 static func _search(current: Vector2, current_name: String, legs_so_far: Array,
-		target: Vector2, target_name: String, team_size: int, final_role: VehicleData.Role,
+		target: Vector2, target_name: String, target_base: BaseData,
+		team_size: int, final_role: VehicleData.Role,
 		bases: Array[BaseData], visited: Dictionary, depth: int,
 		available_vehicles: Array[VehicleData], held_vehicle: VehicleData, routes_out: Array) -> void:
 	var dist_to_target := _haversine_km(current.y, current.x, target.y, target.x)
-	var final_vehicle := pick_best_vehicle(dist_to_target, team_size, final_role, available_vehicles)
-	final_vehicle = _prefer_held(final_vehicle, held_vehicle, depth, dist_to_target, team_size)
+	var final_vehicle := pick_best_vehicle(dist_to_target, team_size, final_role, available_vehicles, target_base)
+	final_vehicle = _prefer_held(final_vehicle, held_vehicle, depth, dist_to_target, team_size, target_base)
 	if final_vehicle != null:
 		var complete: Array = legs_so_far + [_make_leg(
 				final_vehicle, current, current_name, target, target_name, dist_to_target)]
@@ -84,8 +96,11 @@ static func _search(current: Vector2, current_name: String, legs_so_far: Array,
 		if visited.has(base.id) or base.location == current:
 			continue
 		var dist := _haversine_km(current.y, current.x, base.location.y, base.location.x)
-		var relay_vehicle := pick_best_vehicle(dist, team_size, VehicleData.Role.TRANSPORT, available_vehicles)
-		relay_vehicle = _prefer_held(relay_vehicle, held_vehicle, depth, dist, team_size)
+		# Relay destination gates the incoming vehicle by facility too —
+		# a helicopter can't land at an airfield-only base to hand off
+		# to a plane. `base` IS the destination for this leg.
+		var relay_vehicle := pick_best_vehicle(dist, team_size, VehicleData.Role.TRANSPORT, available_vehicles, base)
+		relay_vehicle = _prefer_held(relay_vehicle, held_vehicle, depth, dist, team_size, base)
 		if relay_vehicle == null:
 			continue
 
@@ -97,7 +112,7 @@ static func _search(current: Vector2, current_name: String, legs_so_far: Array,
 		# TeamManager._complete_travel), so the next leg picks fresh from
 		# whatever's actually parked at this base, same as reality. The
 		# held vehicle no longer applies past the first leg either way.
-		_search(base.location, base.base_name, extended, target, target_name,
+		_search(base.location, base.base_name, extended, target, target_name, target_base,
 				team_size, final_role, bases, visited, depth + 1, base.vehicles, null, routes_out)
 		visited.erase(base.id)
 
@@ -107,10 +122,14 @@ static func _search(current: Vector2, current_name: String, legs_so_far: Array,
 ## and is at least as fast — held_vehicle bypasses the role check
 ## entirely, per find_routes's docs.
 static func _prefer_held(current_best: VehicleData, held_vehicle: VehicleData, depth: int,
-		distance_km: float, team_size: int) -> VehicleData:
+		distance_km: float, team_size: int, dest_base: BaseData) -> VehicleData:
 	if depth != 0 or held_vehicle == null:
 		return current_best
 	if not held_vehicle.can_reach(distance_km) or not held_vehicle.can_carry(team_size):
+		return current_best
+	# Same facility gate as pick_best_vehicle — held vehicle bypasses
+	# role, but not landing-strip physics.
+	if dest_base != null and not dest_base.supports(held_vehicle):
 		return current_best
 	if current_best == null or held_vehicle.compute_travel_hours(distance_km) < current_best.compute_travel_hours(distance_km):
 		return held_vehicle
@@ -145,15 +164,22 @@ static func _make_leg(vehicle: VehicleData, from: Vector2, from_name: String,
 
 ## The fastest vehicle of `role` that can reach distance_km and carry
 ## team_size, tie-broken by lowest operation_cost. Used by the relay
-## search above for both relay hops and the final leg.
+## search above for both relay hops and the final leg. dest_base
+## optional — when non-null, filters out vehicles whose required
+## facility isn't present at the destination (a helicopter can't land
+## at an airfield-only base). Null means "no facility constraint"
+## (mission event locations aren't bases).
 static func pick_best_vehicle(distance_km: float, team_size: int,
-		role: VehicleData.Role, vehicles: Array[VehicleData]) -> VehicleData:
+		role: VehicleData.Role, vehicles: Array[VehicleData],
+		dest_base: BaseData = null) -> VehicleData:
 	var best: VehicleData = null
 	var best_hours := INF
 	for v: VehicleData in vehicles:
 		if v.role != role:
 			continue
 		if not v.can_reach(distance_km) or not v.can_carry(team_size):
+			continue
+		if dest_base != null and not dest_base.supports(v):
 			continue
 		var hours := v.compute_travel_hours(distance_km)
 		if best == null or hours < best_hours or (hours == best_hours and v.operation_cost < best.operation_cost):

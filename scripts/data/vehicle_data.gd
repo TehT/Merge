@@ -36,8 +36,20 @@ enum Mode { CONTINUOUS, TELEPORT }
 ##   will filter on once it exists.
 enum Role { TACTICAL, TRANSPORT }
 
+## What kind of base facility this vehicle needs to land on. Filters
+## routing at every leg's destination: a helicopter can't land at a
+## base with no helipad, a fixed-wing plane can't land where there's
+## no airfield. NONE means unrestricted (teleport vehicles, drones,
+## debug tools) and is the default so any pre-existing vehicle
+## resource that doesn't set this explicitly stays landable anywhere.
+## Only checked against destination bases — mission event coordinates
+## have no facility requirements, and source bases obviously have
+## whatever facility the vehicle needs (the vehicle IS there).
+enum Facility { NONE, HELIPAD, AIRFIELD }
+
 @export var vehicle_name: String = "Unnamed Vehicle"
 @export var role: Role = Role.TACTICAL
+@export var required_facility: Facility = Facility.NONE
 @export var mode: Mode = Mode.CONTINUOUS
 @export_multiline var description: String = ""
 
@@ -102,3 +114,10 @@ func get_role_name() -> String:
 	match role:
 		Role.TRANSPORT: return "Transport"
 		_: return "Tactical"
+
+
+func get_facility_name() -> String:
+	match required_facility:
+		Facility.HELIPAD: return "helipad"
+		Facility.AIRFIELD: return "airfield"
+		_: return ""

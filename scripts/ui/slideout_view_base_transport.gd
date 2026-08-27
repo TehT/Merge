@@ -98,4 +98,5 @@ func _on_transport_pressed(on_close: Callable) -> void:
 	var team_name := _team.team_name
 	on_close.call()
 	Game.left_detail.show_view("travel_confirmation",
-			{"team_name": team_name, "ev_title": dest.base_name, "plan": plan, "title": "Team Transporting"})
+			{"team_name": team_name, "ev_title": dest.base_name, "plan": plan,
+			"title": "Team Transporting", "team": _team})

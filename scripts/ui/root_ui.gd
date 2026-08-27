@@ -29,6 +29,7 @@ func _ready() -> void:
 	%MarkerLayer.event_marker_clicked.connect(_on_event_selected)
 	%MarkerLayer.base_marker_clicked.connect(func(base_id: String) -> void:
 		_on_base_selected(Game.base_manager.get_base_by_id(base_id)))
+	%TravelPathLayer.team_marker_clicked.connect(_on_team_selected)
 
 	Game.left_popout.visibility_changed.connect(_on_left_slideout_visibility_changed)
 	Game.right_popout.visibility_changed.connect(_on_right_slideout_visibility_changed)
@@ -56,6 +57,7 @@ func _wire_detail_refresh() -> void:
 	Game.agent_manager.agent_status_changed.connect(func(_aid: String, _o: AgentData.Status, _n: AgentData.Status) -> void: _schedule_detail_refresh())
 	Game.agent_manager.roster_changed.connect(_schedule_detail_refresh)
 	Game.base_manager.equipment_changed.connect(_schedule_detail_refresh)
+	Game.base_manager.vehicles_changed.connect(_schedule_detail_refresh)
 	Game.event_manager.event_resolved.connect(_on_mission_resolved)
 
 

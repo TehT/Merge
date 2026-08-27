@@ -28,12 +28,42 @@ func populate(data: Variant, _dismiss: Callable) -> void:
 	var hq := base if base != null else Game.base_manager.get_primary_base()
 
 	%Title.text = hq.base_name
-	_fill_vehicles(hq.vehicles)
+	%Subtitle.text = "Research vessel" if hq.is_mobile else "Home base"
+	_apply_mobility(hq)
+	_fill_vehicles(hq.vehicles, hq.id)
 	_fill_squads(hq.location)
 	_fill_equipment(hq.local_equipment, hq.id)
 
 
-func _fill_vehicles(vehicles: Array[VehicleData]) -> void:
+## Shows the Relocate row only for mobile bases. When the base is
+## underway, the button is disabled and the status label reports where
+## and when the ship will arrive; when moored, the button is live.
+## TEMPORARY: destination is hardcoded (sails east 20° from current
+## location) so movement can be tested end-to-end before the map-click
+## destination picker lands — see the next commit for the real picker.
+func _apply_mobility(base: BaseData) -> void:
+	%MobilityRow.visible = base.is_mobile
+	if not base.is_mobile:
+		return
+
+	if base.is_relocating:
+		var hours_left := maxf(0.0, (base.travel_arrival_day - Game.game_clock.get_current_time_days()) * 24.0)
+		%Status.text = "En route to %s (%s left)" % [
+				base.travel_destination_name, VehicleData.format_duration(hours_left)]
+		%RelocateBtn.disabled = true
+	else:
+		%Status.text = ""
+		%RelocateBtn.disabled = false
+		%RelocateBtn.pressed.connect(func() -> void:
+				# Placeholder destination — sail 20° east of current
+				# position. Any open water works for testing the
+				# movement path. Real picker replaces this next commit.
+				var dest := Vector2(base.location.x + 20.0, base.location.y)
+				Game.base_manager.begin_base_relocation(base, dest,
+						"debug target (+20° east)"))
+
+
+func _fill_vehicles(vehicles: Array[VehicleData], base_id: String) -> void:
 	_clear_children(%VehicleList)
 	if vehicles.is_empty():
 		_add_placeholder_row("No vehicles in the fleet.", %VehicleList)
@@ -42,8 +72,12 @@ func _fill_vehicles(vehicles: Array[VehicleData]) -> void:
 		var row := vehicle_row_scene.instantiate()
 		%VehicleList.add_child(row)
 		row.populate(vehicle)
+		# Passes the containing base's id alongside the vehicle so the
+		# popout can offer a Relocate action rooted at the right source
+		# (parallels the equipment row's {item, base_id} payload).
 		row.clicked.connect(func(v: VehicleData) -> void:
-				Game.left_popout.toggle_showing("vehicle", v))
+				Game.left_popout.toggle_showing("vehicle",
+						{"vehicle": v, "base_id": base_id}))
 
 
 func _fill_squads(location: Vector2) -> void:

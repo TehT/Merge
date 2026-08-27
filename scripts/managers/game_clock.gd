@@ -24,7 +24,7 @@ const HOURS_PER_DAY := 24
 ## Real seconds per in-game day. Lower this for faster manual iteration.
 ## Matches the pacing GeoscapeController previously used for its own
 ## day/night cycle (day_length_seconds = 3.0 in scenes/Main.tscn).
-@export var seconds_per_day: float = 60.0
+@export var seconds_per_day: float = 120
 
 var current_day: int = 0
 var current_hour: int = 0 # 0-23, hour of the current day
