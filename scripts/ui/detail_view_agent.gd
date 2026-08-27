@@ -4,7 +4,8 @@ extends "res://scripts/ui/detail_view_base.gd"
 ## (just the Archetype readout — clickable, opens the five-axis
 ## breakdown in SlideoutViewPersonality), team, supernatural info.
 
-func populate(agent: AgentData) -> void:
+func populate(data: Variant, _dismiss: Callable) -> void:
+	var agent: AgentData = data
 	_add_title(agent.agent_name)
 	_add_subtitle("%s  —  %s" % [agent.get_status_name(), agent.get_type_name()], _status_color(agent.status))
 
@@ -49,7 +50,7 @@ func populate(agent: AgentData) -> void:
 
 
 ## Just the Archetype name — the five underlying axis bars live in
-## SlideoutViewPersonality (Game.slideout_panel.show_personality()), same
+## SlideoutViewPersonality (Game.left_popout.show("personality", ...)), same
 ## drill-down pattern as a clickable proficiency row.
 func _add_clickable_archetype_row(agent: AgentData) -> void:
 	var row := HBoxContainer.new()
@@ -81,7 +82,7 @@ func _add_clickable_archetype_row(agent: AgentData) -> void:
 
 	row.gui_input.connect(func(ev: InputEvent) -> void:
 		if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
-			Game.slideout_panel.show_personality(agent))
+			Game.left_popout.toggle_showing("personality", agent))
 
 	add_child(row)
 
@@ -118,7 +119,7 @@ func _add_clickable_slot(slot_type: String, equipped: EquipmentData, agent: Agen
 
 	row.gui_input.connect(func(ev: InputEvent) -> void:
 		if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
-			Game.slideout_panel.show_equip_slot(agent, slot_type))
+			Game.left_popout.toggle_showing("equip_slot", {"agent": agent, "slot_type": slot_type}))
 
 	add_child(row)
 
@@ -175,6 +176,6 @@ func _add_clickable_prof_rank(prof_key: String, rank: int, score: float, color: 
 
 	row.gui_input.connect(func(ev: InputEvent) -> void:
 		if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
-			Game.slideout_panel.show_proficiency(agent, prof_key))
+			Game.left_popout.toggle_showing("proficiency", {"agent": agent, "prof_key": prof_key}))
 
 	add_child(row)

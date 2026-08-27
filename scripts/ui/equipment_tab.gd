@@ -189,7 +189,7 @@ func _make_item_row(item: EquipmentData, base_id: String, indent_level: int = 0)
 		if input_event is InputEventMouseButton and input_event.pressed \
 				and input_event.button_index == MOUSE_BUTTON_LEFT:
 			_selected_item = item
-			Game.slideout_panel.show_equipment_info(item, base_id)
+			Game.left_popout.toggle_showing("equipment_info", {"item": item, "base_id": base_id})
 			_refresh())
 
 	return panel

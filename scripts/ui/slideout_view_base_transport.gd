@@ -17,7 +17,8 @@ var _travel_lbl: Label
 var _confirm_btn: Button
 
 
-func populate(team: TeamData, on_close: Callable) -> void:
+func populate(data: Variant, on_close: Callable) -> void:
+	var team: TeamData = data
 	_team = team
 
 	_add_header("Transport: %s" % team.team_name, on_close)
@@ -130,4 +131,5 @@ func _on_transport_pressed(on_close: Callable) -> void:
 		return
 	var team_name := _team.team_name
 	on_close.call()
-	Game.detail_sidebar.show_travel_confirmation(team_name, dest.base_name, plan, "Team Transporting")
+	Game.left_detail.show_view("travel_confirmation",
+			{"team_name": team_name, "ev_title": dest.base_name, "plan": plan, "title": "Team Transporting"})

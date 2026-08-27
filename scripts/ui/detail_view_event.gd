@@ -6,7 +6,8 @@ var _map_shader: Shader
 var _satellite_tex: Texture2D
 
 
-func populate(ev: EventData) -> void:
+func populate(data: Variant, _dismiss: Callable) -> void:
+	var ev: EventData = data
 	_map_shader = load("res://shaders/detail_map_2d.gdshader")
 	_satellite_tex = load("res://textures/satellite_map_4096.png")
 
@@ -173,6 +174,6 @@ func _make_deploy_team_row(ev: EventData) -> Control:
 
 	row.gui_input.connect(func(input_event: InputEvent) -> void:
 		if input_event is InputEventMouseButton and input_event.pressed and input_event.button_index == MOUSE_BUTTON_LEFT:
-			Game.slideout_panel.show_deploy_teams(ev))
+			Game.left_popout.toggle_showing("deploy", ev))
 
 	return row

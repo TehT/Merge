@@ -2,7 +2,8 @@ extends "res://scripts/ui/detail_view_base.gd"
 ## DetailViewTeam — squad sheet: editable name, cohesion, location/travel
 ## ETA, team proficiency ranks, member roster.
 
-func populate(team: TeamData) -> void:
+func populate(data: Variant, _dismiss: Callable) -> void:
+	var team: TeamData = data
 	var title := LineEdit.new()
 	title.text = team.team_name
 	title.add_theme_font_size_override("font_size", 18)
@@ -87,7 +88,7 @@ func _add_clickable_location_row(team: TeamData) -> void:
 
 	row.gui_input.connect(func(ev: InputEvent) -> void:
 		if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
-			Game.slideout_panel.show_base_transport(team))
+			Game.left_popout.toggle_showing("base_transport", team))
 
 	add_child(row)
 

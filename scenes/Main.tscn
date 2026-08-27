@@ -21,9 +21,24 @@
 [ext_resource type="Resource" uid="uid://crtowpara5a43" path="res://data/event_templates/magical_surge.tres" id="13_xa025"]
 [ext_resource type="Script" uid="uid://dglngvv1scups" path="res://scripts/ui/top_bar.gd" id="14_topbar"]
 [ext_resource type="Script" uid="uid://d1a4kuru82rac" path="res://scripts/ui/root_ui.gd" id="15_rootui"]
-[ext_resource type="Script" uid="uid://0e1m87kygusj" path="res://scripts/ui/detail_sidebar.gd" id="16_detailpanel"]
+[ext_resource type="Script" uid="uid://bcxeltuttyx1e" path="res://scripts/ui/panel_host.gd" id="16_detailpanel"]
+[ext_resource type="Script" uid="uid://mta8b8pg60fh" path="res://scripts/ui/detail_view_empty.gd" id="ldv_empty"]
+[ext_resource type="Script" uid="uid://dqbv4j7th4g4i" path="res://scripts/ui/detail_view_agent.gd" id="ldv_agent"]
+[ext_resource type="Script" uid="uid://d0c8xx6avtbgi" path="res://scripts/ui/detail_view_team.gd" id="ldv_team"]
+[ext_resource type="Script" uid="uid://2hyvn18r5g8g" path="res://scripts/ui/detail_view_event.gd" id="ldv_event"]
+[ext_resource type="Script" uid="uid://bpapfyl0r2f3f" path="res://scripts/ui/detail_view_hq.gd" id="ldv_hq"]
+[ext_resource type="Script" uid="uid://b0wwq2uh51gtb" path="res://scripts/ui/detail_view_mission_result.gd" id="ldv_mission_result"]
+[ext_resource type="Script" uid="uid://dcr8vor87w3qy" path="res://scripts/ui/detail_view_travel_confirmation.gd" id="ldv_travel_confirmation"]
 [ext_resource type="Script" uid="uid://bemolojavpkub" path="res://scripts/ui/events_tab.gd" id="17_eventstab"]
-[ext_resource type="Script" uid="uid://d3sowmtwnncfn" path="res://scripts/ui/slideout_panel.gd" id="18_skillslideout"]
+[ext_resource type="Script" uid="uid://bcxeltuttyx1e" path="res://scripts/ui/panel_host.gd" id="18_skillslideout"]
+[ext_resource type="Script" uid="uid://ck3dmulx8wqbr" path="res://scripts/ui/slideout_view_proficiency.gd" id="lpv_proficiency"]
+[ext_resource type="Script" uid="uid://isqhh5kx2a2u" path="res://scripts/ui/slideout_view_deploy.gd" id="lpv_deploy"]
+[ext_resource type="Script" uid="uid://dx13diyshg6lb" path="res://scripts/ui/slideout_view_vehicle.gd" id="lpv_vehicle"]
+[ext_resource type="Script" uid="uid://dcxa71ojovhxg" path="res://scripts/ui/slideout_view_equipment.gd" id="lpv_equipment_info"]
+[ext_resource type="Script" uid="uid://ex76yc4kdbax" path="res://scripts/ui/slideout_view_equip_slot.gd" id="lpv_equip_slot"]
+[ext_resource type="Script" uid="uid://bfxeng3q0glef" path="res://scripts/ui/slideout_view_event_log.gd" id="lpv_event_log"]
+[ext_resource type="Script" uid="uid://b3aj6uo1i7c75" path="res://scripts/ui/slideout_view_personality.gd" id="lpv_personality"]
+[ext_resource type="Script" uid="uid://gu7ugr05iyxv" path="res://scripts/ui/slideout_view_base_transport.gd" id="lpv_base_transport"]
 [ext_resource type="Script" uid="uid://dgvq56yx673qk" path="res://scripts/ui/event_map_labels.gd" id="19_eventmaplabels"]
 [ext_resource type="Script" uid="uid://bsq774q1vd22" path="res://scripts/travel_path_layer.gd" id="20_travelpathlayer"]
 [ext_resource type="Script" uid="uid://d1ppro81a3mt0" path="res://scripts/ui/equipment_tab.gd" id="21_equipmenttab"]
@@ -31,7 +46,8 @@
 [ext_resource type="Script" uid="uid://drg2k66cmj2ix" path="res://scripts/ui/mission_choice_dialog.gd" id="23_missionchoicedialog"]
 [ext_resource type="Script" uid="uid://ccpg4t1tynq76" path="res://scripts/managers/event_log.gd" id="24_eventlog"]
 [ext_resource type="Script" uid="uid://k3u0nglcx1qi" path="res://scripts/managers/hiring_manager.gd" id="25_hiringmanager"]
-[ext_resource type="Script" uid="uid://q34k46h43i14" path="res://scripts/ui/right_slideout_panel.gd" id="27_rightslideout"]
+[ext_resource type="Script" uid="uid://bcxeltuttyx1e" path="res://scripts/ui/panel_host.gd" id="27_rightslideout"]
+[ext_resource type="Script" uid="uid://cpj3cihng8mr5" path="res://scripts/ui/right_slideout_view_hire.gd" id="rpv_hire"]
 [ext_resource type="Script" uid="uid://74brlnr2uioy" path="res://scripts/ui/bases_tab.gd" id="28_basestab"]
 
 [sub_resource type="Environment" id="Environment_1"]
@@ -291,18 +307,30 @@ grow_vertical = 2
 mouse_filter = 2
 script = ExtResource("19_eventmaplabels")
 
-[node name="SkillSlideout" type="PanelContainer" parent="UI/Root" unique_id=1965322046]
+[node name="LeftPopout" type="PanelContainer" parent="UI/Root" unique_id=1965322046]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(20, 0)
-custom_maximum_size = Vector2(320, -1)
+custom_minimum_size = Vector2(260, 0)
+custom_maximum_size = Vector2(260, -1)
 layout_mode = 1
 anchors_preset = 9
 anchor_bottom = 1.0
 offset_top = 56.0
-offset_right = 20.0
+offset_right = 260.0
 offset_bottom = -12.0
 grow_vertical = 2
+visible = false
 script = ExtResource("18_skillslideout")
+register_as = &"left_popout"
+view_registry = {
+"base_transport": ExtResource("lpv_base_transport"),
+"deploy": ExtResource("lpv_deploy"),
+"equip_slot": ExtResource("lpv_equip_slot"),
+"equipment_info": ExtResource("lpv_equipment_info"),
+"event_log": ExtResource("lpv_event_log"),
+"personality": ExtResource("lpv_personality"),
+"proficiency": ExtResource("lpv_proficiency"),
+"vehicle": ExtResource("lpv_vehicle")
+}
 
 [node name="LeftSidebar" type="PanelContainer" parent="UI/Root" unique_id=689593108]
 unique_name_in_owner = true
@@ -319,20 +347,24 @@ theme_override_styles/panel = SubResource("StyleBoxEmpty_pnhog")
 [node name="HBoxContainer" type="HBoxContainer" parent="UI/Root/LeftSidebar" unique_id=109442368]
 layout_mode = 2
 
-[node name="PanelContainer" type="PanelContainer" parent="UI/Root/LeftSidebar/HBoxContainer" unique_id=817696884]
+[node name="LeftDetail" type="PanelContainer" parent="UI/Root/LeftSidebar/HBoxContainer" unique_id=817696884]
+unique_name_in_owner = true
 custom_minimum_size = Vector2(300, 0)
 custom_maximum_size = Vector2(300, -1)
 layout_mode = 2
-
-[node name="LeftScroll" type="ScrollContainer" parent="UI/Root/LeftSidebar/HBoxContainer/PanelContainer" unique_id=1937741878]
-custom_minimum_size = Vector2(300, 0)
-layout_mode = 2
-horizontal_scroll_mode = 0
-
-[node name="DetailContent" type="VBoxContainer" parent="UI/Root/LeftSidebar/HBoxContainer/PanelContainer/LeftScroll" unique_id=1085952460]
-layout_mode = 2
-size_flags_horizontal = 3
 script = ExtResource("16_detailpanel")
+register_as = &"left_detail"
+default_view_id = "empty"
+hide_on_dismiss = false
+view_registry = {
+"agent": ExtResource("ldv_agent"),
+"empty": ExtResource("ldv_empty"),
+"event": ExtResource("ldv_event"),
+"hq": ExtResource("ldv_hq"),
+"mission_result": ExtResource("ldv_mission_result"),
+"team": ExtResource("ldv_team"),
+"travel_confirmation": ExtResource("ldv_travel_confirmation")
+}
 
 [node name="DetailPanel" type="VBoxContainer" parent="UI/Root/LeftSidebar/HBoxContainer" unique_id=1085952443]
 unique_name_in_owner = true
@@ -422,99 +454,110 @@ tooltip_text = "Bases"
 focus_mode = 0
 text = "⌂"
 
-[node name="PanelContainer" type="PanelContainer" parent="UI/Root/RightSidebar/Layout" unique_id=184179620]
+[node name="RightPrimary" type="PanelContainer" parent="UI/Root/RightSidebar/Layout" unique_id=184179620]
 custom_minimum_size = Vector2(300, 0)
 layout_mode = 2
+script = ExtResource("18_skillslideout")
+register_as = &"right_primary"
+mode = 1
+tab_ids = PackedStringArray("squads", "events", "research", "equipment", "bases")
 
-[node name="Tabs" type="TabContainer" parent="UI/Root/RightSidebar/Layout/PanelContainer" unique_id=1977334389]
+[node name="Tabs" type="TabContainer" parent="UI/Root/RightSidebar/Layout/RightPrimary" unique_id=1977334389]
 unique_name_in_owner = true
 layout_mode = 2
 current_tab = 1
 tabs_visible = false
 
-[node name="Squads" type="VBoxContainer" parent="UI/Root/RightSidebar/Layout/PanelContainer/Tabs" unique_id=1023984741]
+[node name="Squads" type="VBoxContainer" parent="UI/Root/RightSidebar/Layout/RightPrimary/Tabs" unique_id=1023984741]
 visible = false
 layout_mode = 2
 metadata/_tab_index = 0
 
-[node name="SquadScroll" type="ScrollContainer" parent="UI/Root/RightSidebar/Layout/PanelContainer/Tabs/Squads" unique_id=34452012]
+[node name="SquadScroll" type="ScrollContainer" parent="UI/Root/RightSidebar/Layout/RightPrimary/Tabs/Squads" unique_id=34452012]
 layout_mode = 2
 size_flags_vertical = 3
 horizontal_scroll_mode = 0
 
-[node name="SquadList" type="VBoxContainer" parent="UI/Root/RightSidebar/Layout/PanelContainer/Tabs/Squads/SquadScroll" unique_id=1559793329]
+[node name="SquadList" type="VBoxContainer" parent="UI/Root/RightSidebar/Layout/RightPrimary/Tabs/Squads/SquadScroll" unique_id=1559793329]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 script = ExtResource("11_agenttab")
 
-[node name="Events" type="ScrollContainer" parent="UI/Root/RightSidebar/Layout/PanelContainer/Tabs" unique_id=734486557]
+[node name="Events" type="ScrollContainer" parent="UI/Root/RightSidebar/Layout/RightPrimary/Tabs" unique_id=734486557]
 layout_mode = 2
 horizontal_scroll_mode = 0
 metadata/_tab_index = 1
 
-[node name="EventList" type="VBoxContainer" parent="UI/Root/RightSidebar/Layout/PanelContainer/Tabs/Events" unique_id=1791181196]
+[node name="EventList" type="VBoxContainer" parent="UI/Root/RightSidebar/Layout/RightPrimary/Tabs/Events" unique_id=1791181196]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 script = ExtResource("17_eventstab")
 
-[node name="Research" type="ScrollContainer" parent="UI/Root/RightSidebar/Layout/PanelContainer/Tabs" unique_id=813551765]
+[node name="Research" type="ScrollContainer" parent="UI/Root/RightSidebar/Layout/RightPrimary/Tabs" unique_id=813551765]
 visible = false
 layout_mode = 2
 metadata/_tab_index = 2
 
-[node name="ResearchPlaceholder" type="Label" parent="UI/Root/RightSidebar/Layout/PanelContainer/Tabs/Research" unique_id=1840294243]
+[node name="ResearchPlaceholder" type="Label" parent="UI/Root/RightSidebar/Layout/RightPrimary/Tabs/Research" unique_id=1840294243]
 layout_mode = 2
 text = "Research — coming soon"
 
-[node name="Equipment" type="VBoxContainer" parent="UI/Root/RightSidebar/Layout/PanelContainer/Tabs" unique_id=795735576]
+[node name="Equipment" type="VBoxContainer" parent="UI/Root/RightSidebar/Layout/RightPrimary/Tabs" unique_id=795735576]
 visible = false
 layout_mode = 2
 metadata/_tab_index = 3
 
-[node name="EquipmentSearchBar" type="LineEdit" parent="UI/Root/RightSidebar/Layout/PanelContainer/Tabs/Equipment" unique_id=-1747153396]
+[node name="EquipmentSearchBar" type="LineEdit" parent="UI/Root/RightSidebar/Layout/RightPrimary/Tabs/Equipment" unique_id=-1747153396]
 unique_name_in_owner = true
 layout_mode = 2
 placeholder_text = "Search equipment..."
 clear_button_enabled = true
 
-[node name="EquipmentScroll" type="ScrollContainer" parent="UI/Root/RightSidebar/Layout/PanelContainer/Tabs/Equipment" unique_id=-1747153395]
+[node name="EquipmentScroll" type="ScrollContainer" parent="UI/Root/RightSidebar/Layout/RightPrimary/Tabs/Equipment" unique_id=-1747153395]
 layout_mode = 2
 size_flags_vertical = 3
 horizontal_scroll_mode = 0
 
-[node name="EquipmentList" type="VBoxContainer" parent="UI/Root/RightSidebar/Layout/PanelContainer/Tabs/Equipment/EquipmentScroll" unique_id=1018624314]
+[node name="EquipmentList" type="VBoxContainer" parent="UI/Root/RightSidebar/Layout/RightPrimary/Tabs/Equipment/EquipmentScroll" unique_id=1018624314]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 script = ExtResource("21_equipmenttab")
 
-[node name="Bases" type="ScrollContainer" parent="UI/Root/RightSidebar/Layout/PanelContainer/Tabs" unique_id=833964492]
+[node name="Bases" type="ScrollContainer" parent="UI/Root/RightSidebar/Layout/RightPrimary/Tabs" unique_id=833964492]
 visible = false
 layout_mode = 2
 horizontal_scroll_mode = 0
 metadata/_tab_index = 4
 
-[node name="BasesList" type="VBoxContainer" parent="UI/Root/RightSidebar/Layout/PanelContainer/Tabs/Bases" unique_id=17296059]
+[node name="BasesList" type="VBoxContainer" parent="UI/Root/RightSidebar/Layout/RightPrimary/Tabs/Bases" unique_id=17296059]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 script = ExtResource("28_basestab")
 
-[node name="RightSlideout" type="PanelContainer" parent="UI/Root" unique_id=618008480]
+[node name="RightPopout" type="PanelContainer" parent="UI/Root" unique_id=618008480]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(260, 0)
+custom_maximum_size = Vector2(260, -1)
 layout_mode = 1
 anchors_preset = 11
 anchor_left = 1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = -20.0
+offset_left = -260.0
 offset_top = 56.0
 offset_bottom = -12.0
 grow_horizontal = 0
 grow_vertical = 2
+visible = false
 script = ExtResource("27_rightslideout")
+register_as = &"right_popout"
+view_registry = {
+"hire": ExtResource("rpv_hire")
+}
 
 [node name="MissionChoiceDialog" type="Control" parent="UI/Root" unique_id=664288587]
 layout_mode = 1

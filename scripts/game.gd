@@ -12,8 +12,9 @@ var hiring_manager: HiringManager
 var geo_data: GeoData
 var marker_layer: MarkerLayer
 
-var detail_sidebar: DetailSidebar
-var slideout_panel: SlideoutPanel
-var right_slideout_panel: RightSlideoutPanel
+var left_detail: PanelHost
+var left_popout: PanelHost
+var right_primary: PanelHost
+var right_popout: PanelHost
 var mission_choice_dialog: MissionChoiceDialog
 var root_ui: RootUI

@@ -11,7 +11,8 @@ const BAR_H := 14.0
 const FILL_COLOR := Color(0.75, 0.68, 0.5, 1.0)
 
 
-func populate(agent: AgentData, on_close: Callable) -> void:
+func populate(data: Variant, on_close: Callable) -> void:
+	var agent: AgentData = data
 	_add_header("Personality", on_close)
 
 	var archetype_lbl := Label.new()

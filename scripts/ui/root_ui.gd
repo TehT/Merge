@@ -13,13 +13,13 @@ func _ready() -> void:
 	Game.root_ui = self
 	%DetailPanel/LeftToggle.pressed.connect(_toggle_left)
 	$RightSidebar/Layout/RightTabIcons/RightToggle.pressed.connect(_toggle_right)
-	%EventLogToggle.pressed.connect(func() -> void: Game.slideout_panel.show_event_log())
+	%EventLogToggle.pressed.connect(func() -> void: Game.left_popout.toggle_showing("event_log"))
 
-	%SquadsIcon.pressed.connect(func() -> void: %Tabs.current_tab = 0)
-	%EventsIcon.pressed.connect(func() -> void: %Tabs.current_tab = 1)
-	%ResearchIcon.pressed.connect(func() -> void: %Tabs.current_tab = 2)
-	%EquipmentIcon.pressed.connect(func() -> void: %Tabs.current_tab = 3)
-	%BasesIcon.pressed.connect(func() -> void: %Tabs.current_tab = 4)
+	%SquadsIcon.pressed.connect(func() -> void: Game.right_primary.set_active_tab("squads"))
+	%EventsIcon.pressed.connect(func() -> void: Game.right_primary.set_active_tab("events"))
+	%ResearchIcon.pressed.connect(func() -> void: Game.right_primary.set_active_tab("research"))
+	%EquipmentIcon.pressed.connect(func() -> void: Game.right_primary.set_active_tab("equipment"))
+	%BasesIcon.pressed.connect(func() -> void: Game.right_primary.set_active_tab("bases"))
 
 	%SquadList.agent_selected.connect(_on_agent_selected)
 	%SquadList.team_selected.connect(_on_team_selected)
@@ -30,35 +30,79 @@ func _ready() -> void:
 	%MarkerLayer.base_marker_clicked.connect(func(base_id: String) -> void:
 		_on_base_selected(Game.base_manager.get_base_by_id(base_id)))
 
-	Game.slideout_panel.visibility_changed.connect(_on_left_slideout_visibility_changed)
-	Game.right_slideout_panel.visibility_changed.connect(_on_right_slideout_visibility_changed)
+	Game.left_popout.visibility_changed.connect(_on_left_slideout_visibility_changed)
+	Game.right_popout.visibility_changed.connect(_on_right_slideout_visibility_changed)
+
+	_wire_detail_refresh()
 
 	_apply_left(false)
 	_apply_right(false)
 
 
+## Signals that used to live in detail_sidebar.gd's _ready() — schedule
+## a refresh of Game.left_detail's current view whenever anything might
+## have changed the data it's showing. Only the agent/team/hq views
+## actually refresh (event and mission_result are static once shown);
+## the check in _do_detail_refresh gates on the current view id.
+func _wire_detail_refresh() -> void:
+	Game.team_manager.membership_changed.connect(func(_tid: String) -> void: _schedule_detail_refresh())
+	Game.team_manager.cohesion_changed.connect(func(_tid: String, _v: float, _d: float) -> void: _schedule_detail_refresh())
+	Game.team_manager.training_started.connect(func(_tid: String) -> void: _schedule_detail_refresh())
+	Game.team_manager.training_completed.connect(func(_tid: String) -> void: _schedule_detail_refresh())
+	Game.team_manager.team_departed.connect(func(_tid: String) -> void: _schedule_detail_refresh())
+	Game.team_manager.team_arrived.connect(func(_tid: String, _eid: String) -> void: _schedule_detail_refresh())
+	Game.team_manager.team_created.connect(func(_t: TeamData) -> void: _schedule_detail_refresh())
+	Game.team_manager.team_renamed.connect(func(_tid: String) -> void: _schedule_detail_refresh())
+	Game.agent_manager.agent_status_changed.connect(func(_aid: String, _o: AgentData.Status, _n: AgentData.Status) -> void: _schedule_detail_refresh())
+	Game.agent_manager.roster_changed.connect(_schedule_detail_refresh)
+	Game.base_manager.equipment_changed.connect(_schedule_detail_refresh)
+	Game.event_manager.event_resolved.connect(_on_mission_resolved)
+
+
+var _detail_refresh_pending := false
+
+
+func _schedule_detail_refresh() -> void:
+	if _detail_refresh_pending:
+		return
+	_detail_refresh_pending = true
+	_do_detail_refresh.call_deferred()
+
+
+func _do_detail_refresh() -> void:
+	_detail_refresh_pending = false
+	var vid: String = Game.left_detail.get_current_view_id()
+	if vid == "agent" or vid == "team" or vid == "hq":
+		Game.left_detail.refresh()
+
+
+func _on_mission_resolved(ev: EventData, team_name: String, result: MissionResolutionResult) -> void:
+	Game.left_detail.show_view("mission_result", {"team_name": team_name, "ev_title": ev.title, "result": result})
+	open_left()
+
+
 func _on_agent_selected(agent: AgentData) -> void:
-	Game.detail_sidebar.show_agent(agent)
+	Game.left_detail.show_view("agent", agent)
 	open_left()
 
 
 func _on_team_selected(team: TeamData) -> void:
-	Game.detail_sidebar.show_team(team)
+	Game.left_detail.show_view("team", team)
 	open_left()
 
 
 func _on_base_selected(base: BaseData) -> void:
-	Game.detail_sidebar.show_hq(base)
+	Game.left_detail.show_view("hq", base)
 	open_left()
 
 
 func _on_event_selected(ev: EventData) -> void:
-	Game.detail_sidebar.show_event(ev)
+	Game.left_detail.show_view("event", ev)
 	open_left()
 
 
 ## Public (unlike _toggle_left/_apply_left) — called from anywhere that
-## just populated Game.detail_sidebar and wants the left sidebar visibly
+## just populated Game.left_detail and wants the left sidebar visibly
 ## open for it, without caring whether it already was (e.g.
 ## RightSlideoutViewHire, clicking a recruit).
 func open_left() -> void:
@@ -98,17 +142,17 @@ func _apply_left(animate: bool) -> void:
 
 func _apply_slideout(animate: bool) -> void:
 	var base := SIDEBAR_W + TOGGLE_W if _left_open else TOGGLE_W
-	var so_visible: bool = Game.slideout_panel.visible
+	var so_visible: bool = Game.left_popout.visible
 	var so_l := base if so_visible else base - SLIDEOUT_W+50
 	var so_r := base + SLIDEOUT_W+15 if so_visible else base+15
 
 	if animate:
 		var tw := create_tween().set_parallel()
-		tw.tween_property(Game.slideout_panel, "offset_left", so_l, ANIM_SPEED)
-		tw.tween_property(Game.slideout_panel, "offset_right", so_r, ANIM_SPEED)
+		tw.tween_property(Game.left_popout, "offset_left", so_l, ANIM_SPEED)
+		tw.tween_property(Game.left_popout, "offset_right", so_r, ANIM_SPEED)
 	else:
-		Game.slideout_panel.offset_left = so_l
-		Game.slideout_panel.offset_right = so_r
+		Game.left_popout.offset_left = so_l
+		Game.left_popout.offset_right = so_r
 
 
 func _apply_right(animate: bool) -> void:
@@ -131,32 +175,32 @@ func _apply_right(animate: bool) -> void:
 
 func _apply_right_slideout(animate: bool) -> void:
 	var base := SIDEBAR_W + TOGGLE_W if _right_open else TOGGLE_W
-	var so_visible: bool = Game.right_slideout_panel.visible
+	var so_visible: bool = Game.right_popout.visible
 	var so_l := -(base + SLIDEOUT_W) if so_visible else -base
 	var so_r := -base if so_visible else -(base - SLIDEOUT_W)
 
 	if animate:
 		var tw := create_tween().set_parallel()
-		tw.tween_property(Game.right_slideout_panel, "offset_left", so_l, ANIM_SPEED)
-		tw.tween_property(Game.right_slideout_panel, "offset_right", so_r, ANIM_SPEED)
+		tw.tween_property(Game.right_popout, "offset_left", so_l, ANIM_SPEED)
+		tw.tween_property(Game.right_popout, "offset_right", so_r, ANIM_SPEED)
 	else:
-		Game.right_slideout_panel.offset_left = so_l
-		Game.right_slideout_panel.offset_right = so_r
+		Game.right_popout.offset_left = so_l
+		Game.right_popout.offset_right = so_r
 
 
 func _on_left_slideout_visibility_changed() -> void:
-	if Game.slideout_panel.visible and Game.right_slideout_panel.visible and _slideouts_would_overlap():
-		Game.right_slideout_panel.dismiss()
+	if Game.left_popout.visible and Game.right_popout.visible and _slideouts_would_overlap():
+		Game.right_popout.dismiss()
 	_apply_slideout(true)
 
 
 func _on_right_slideout_visibility_changed() -> void:
-	if Game.right_slideout_panel.visible and Game.slideout_panel.visible and _slideouts_would_overlap():
-		Game.slideout_panel.dismiss()
+	if Game.right_popout.visible and Game.left_popout.visible and _slideouts_would_overlap():
+		Game.left_popout.dismiss()
 	_apply_right_slideout(true)
 
 
-## True if the left SlideoutPanel and the right RightSlideoutPanel would
+## True if the left popout and the right popout would
 ## visually overlap at their current open/closed target positions, given
 ## the viewport's current width. Checked whenever either becomes visible
 ## so opening one can pre-emptively close the other rather than letting

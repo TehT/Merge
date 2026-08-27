@@ -3,8 +3,8 @@ extends VBoxContainer
 ## views (Agent/Team/Event/Result/HQ). Each concrete view extends this by
 ## path (`extends "res://scripts/ui/detail_view_base.gd"`) rather than via
 ## class_name, so instantiating them needs no global-class-cache
-## registration — DetailSidebar (the loader) just preloads each script and
-## calls .new() on it, then add_child()s the result and calls populate().
+## registration — PanelHost (Game.left_detail) just instantiates the
+## registered script and calls populate(data, dismiss) on it.
 
 func _add_title(text: String, font_size: int = 18) -> void:
 	var lbl := Label.new()
@@ -46,6 +46,15 @@ func _add_info_row(label: String, value: String) -> void:
 	row.add_child(val_lbl)
 
 	add_child(row)
+
+
+func _add_close_button(on_close: Callable) -> void:
+	var close_btn := Button.new()
+	close_btn.text = "Close"
+	close_btn.focus_mode = Control.FOCUS_NONE
+	close_btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	close_btn.pressed.connect(on_close)
+	add_child(close_btn)
 
 
 func _add_placeholder_row(text: String) -> void:

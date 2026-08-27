@@ -2,7 +2,8 @@ extends "res://scripts/ui/slideout_view_base.gd"
 ## SlideoutViewVehicle — full stat card for one fleet vehicle: image slot,
 ## mode, speed, range, capacity, operation cost, cooldown, description.
 
-func populate(v: VehicleData, on_close: Callable) -> void:
+func populate(data: Variant, on_close: Callable) -> void:
+	var v: VehicleData = data
 	var accent := Color(0.5, 0.6, 0.8, 1.0)
 
 	_add_header(v.vehicle_name, on_close, accent, 15)

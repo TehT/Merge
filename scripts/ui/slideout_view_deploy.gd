@@ -8,7 +8,8 @@ extends "res://scripts/ui/slideout_view_base.gd"
 var _event: EventData
 
 
-func populate(ev: EventData, on_close: Callable) -> void:
+func populate(data: Variant, on_close: Callable) -> void:
+	var ev: EventData = data
 	_event = ev
 
 	_add_header("Deploy Team", on_close)
@@ -190,4 +191,5 @@ func _on_deploy_pressed(team: TeamData, dropdown: OptionButton, on_close: Callab
 	if plan.is_empty():
 		return
 	on_close.call()
-	Game.detail_sidebar.show_travel_confirmation(team_name, ev_title, plan)
+	Game.left_detail.show_view("travel_confirmation",
+			{"team_name": team_name, "ev_title": ev_title, "plan": plan})

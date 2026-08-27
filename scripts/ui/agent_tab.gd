@@ -81,14 +81,14 @@ func _refresh() -> void:
 
 ## Pinned outside the scrollable list, at the bottom of the Squads tab:
 ## "+ New Squad" plus "Hire", side by side — Hire used to be its own
-## right-sidebar icon (opening RightSlideoutPanel directly), moved here
+## right-sidebar icon (opening the right popout directly), moved here
 ## since it's squad-roster-adjacent and the icon column was getting
 ## crowded with things that aren't really tab switches.
 func _make_bottom_row() -> HBoxContainer:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 4)
 	row.add_child(_make_flat_button("+ New Squad", _on_new_squad_pressed))
-	row.add_child(_make_flat_button("Hire", func() -> void: Game.right_slideout_panel.show_hire()))
+	row.add_child(_make_flat_button("Hire", func() -> void: Game.right_popout.toggle_showing("hire")))
 	return row
 
 

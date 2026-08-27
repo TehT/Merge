@@ -11,7 +11,8 @@ extends "res://scripts/ui/detail_view_base.gd"
 ## base doesn't. The right sidebar's Squads tab (agent_tab.gd) stays a
 ## flat, base-blind roster of every squad in the org.
 
-func populate(base: BaseData = null) -> void:
+func populate(data: Variant, _dismiss: Callable) -> void:
+	var base: BaseData = data
 	var hq := base if base != null else Game.base_manager.get_primary_base()
 	_add_title(hq.base_name)
 	_add_subtitle("Home base", Color(0.55, 0.55, 0.6, 1.0))
@@ -94,7 +95,7 @@ func _make_vehicle_row(vehicle: VehicleData) -> Control:
 
 	row.gui_input.connect(func(input_event: InputEvent) -> void:
 		if input_event is InputEventMouseButton and input_event.pressed and input_event.button_index == MOUSE_BUTTON_LEFT:
-			Game.slideout_panel.show_vehicle(vehicle))
+			Game.left_popout.toggle_showing("vehicle", vehicle))
 
 	return row
 
@@ -117,6 +118,6 @@ func _make_equipment_row(item: EquipmentData, base_id: String) -> Control:
 
 	row.gui_input.connect(func(input_event: InputEvent) -> void:
 		if input_event is InputEventMouseButton and input_event.pressed and input_event.button_index == MOUSE_BUTTON_LEFT:
-			Game.slideout_panel.show_equipment_info(item, base_id))
+			Game.left_popout.toggle_showing("equipment_info", {"item": item, "base_id": base_id}))
 
 	return row

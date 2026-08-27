@@ -10,7 +10,9 @@ var _item: EquipmentData
 var _base_id: String
 
 
-func populate(item: EquipmentData, base_id: String, on_close: Callable) -> void:
+func populate(data: Variant, on_close: Callable) -> void:
+	var item: EquipmentData = data["item"]
+	var base_id: String = data["base_id"]
 	_item = item
 	_base_id = base_id
 	var accent := Color(0.5, 0.6, 0.8, 1.0)

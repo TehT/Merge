@@ -1,6 +1,6 @@
 extends "res://scripts/ui/slideout_view_base.gd"
 ## RightSlideoutViewHire — the weekly hiring pool (HiringManager), shown in
-## the right-side popout (RightSlideoutPanel). Each row shows a recruit's
+## the right-side popout (Game.right_popout). Each row shows a recruit's
 ## name/type/proficiency spread and a Hire button (disabled if funding is
 ## short); hiring moves them onto the roster immediately and removes them
 ## from the pool. Clicking anywhere on a row other than the Hire button
@@ -10,7 +10,7 @@ extends "res://scripts/ui/slideout_view_base.gd"
 var _list: VBoxContainer
 
 
-func populate(on_close: Callable) -> void:
+func populate(_data: Variant, on_close: Callable) -> void:
 	_add_header("Hire", on_close)
 	add_child(HSeparator.new())
 
@@ -114,7 +114,7 @@ func _make_recruit_row(recruit: AgentData) -> Control:
 	panel.gui_input.connect(func(input_event: InputEvent) -> void:
 		if input_event is InputEventMouseButton and input_event.pressed \
 				and input_event.button_index == MOUSE_BUTTON_LEFT:
-			Game.detail_sidebar.show_agent(recruit)
+			Game.left_detail.show_view("agent", recruit)
 			Game.root_ui.open_left())
 
 	return panel

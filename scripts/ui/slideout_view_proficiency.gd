@@ -2,7 +2,9 @@ extends "res://scripts/ui/slideout_view_base.gd"
 ## SlideoutViewProficiency — drill-down for one proficiency: rank pips,
 ## category description, and a card per underlying skill (rank, tags).
 
-func populate(agent: AgentData, prof_key: String, on_close: Callable) -> void:
+func populate(data: Variant, on_close: Callable) -> void:
+	var agent: AgentData = data["agent"]
+	var prof_key: String = data["prof_key"]
 	var color: Color = SkillData.PROFICIENCY_COLORS.get(prof_key, Color.WHITE)
 
 	_add_header(prof_key.capitalize(), on_close, color, 16)

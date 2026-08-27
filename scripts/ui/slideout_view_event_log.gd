@@ -8,7 +8,7 @@ extends VBoxContainer
 var _list: VBoxContainer
 
 
-func populate(_on_close: Callable) -> void:
+func populate(_data: Variant, _on_close: Callable) -> void:
 	_add_header("Event Log")
 	add_child(HSeparator.new())
 

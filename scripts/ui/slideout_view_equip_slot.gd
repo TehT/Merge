@@ -13,7 +13,9 @@ extends "res://scripts/ui/slideout_view_base.gd"
 var _agent: AgentData
 var _slot_type: String
 
-func populate(agent: AgentData, slot_type: String, on_close: Callable) -> void:
+func populate(data: Variant, on_close: Callable) -> void:
+	var agent: AgentData = data["agent"]
+	var slot_type: String = data["slot_type"]
 	_agent = agent
 	_slot_type = slot_type
 
@@ -120,10 +122,10 @@ func _on_equip_pressed(item: EquipmentData, on_close: Callable) -> void:
 	if not _agent.equip(item):
 		return
 	on_close.call()
-	Game.detail_sidebar.show_agent(_agent)
+	Game.left_detail.show_view("agent", _agent)
 
 
 func _on_unequip_pressed(on_close: Callable) -> void:
 	_agent.unequip(_slot_type)
 	on_close.call()
-	Game.detail_sidebar.show_agent(_agent)
+	Game.left_detail.show_view("agent", _agent)

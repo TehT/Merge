@@ -2,7 +2,7 @@ extends Control
 class_name MissionChoiceDialog
 ## MissionChoiceDialog — full-screen modal for ChoicePhase's PLAYER_CHOICE
 ## trigger. Referenced elsewhere via Game.mission_choice_dialog (registers
-## itself in _ready(), same pattern as SlideoutPanel/DetailSidebar).
+## itself in _ready(), same pattern as PanelHost's `register_as`).
 ## request_choice() is the only entry point ChoicePhase calls: it
 ## populates the dialogue, shows it, suspends until the player clicks an
 ## option, then hides itself and returns the chosen MissionCheck — the
