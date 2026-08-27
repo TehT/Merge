@@ -1,0 +1,153 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" uid="uid://2hyvn18r5g8g" path="res://scripts/ui/detail_view_event.gd" id="script"]
+[ext_resource type="Shader" path="res://shaders/detail_map_2d.gdshader" id="map_shader"]
+[ext_resource type="Texture2D" path="res://textures/satellite_map_4096.png" id="satellite_tex"]
+[ext_resource type="PackedScene" path="res://scenes/ui/rows/info_row.tscn" id="info_row"]
+
+[sub_resource type="StyleBoxFlat" id="map_style"]
+content_margin_left = 1.0
+content_margin_top = 1.0
+content_margin_right = 1.0
+content_margin_bottom = 1.0
+bg_color = Color(0.03, 0.06, 0.12, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.18, 0.25, 0.35, 1)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+
+[sub_resource type="ShaderMaterial" id="map_material"]
+shader = ExtResource("map_shader")
+shader_parameter/satellite_map = ExtResource("satellite_tex")
+shader_parameter/aspect = 1.75
+
+[node name="DetailEvent" type="VBoxContainer"]
+script = ExtResource("script")
+
+[node name="Title" type="Label" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+
+[node name="Subtitle" type="Label" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="DeployRow" type="HBoxContainer" parent="."]
+layout_mode = 2
+mouse_filter = 0
+mouse_default_cursor_shape = 2
+theme_override_constants/separation = 6
+
+[node name="DeployLabel" type="Label" parent="DeployRow"]
+layout_mode = 2
+mouse_filter = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 14
+text = "Deploy Team"
+
+[node name="Arrow" type="Label" parent="DeployRow"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.4, 0.42, 0.48, 1)
+theme_override_font_sizes/font_size = 16
+text = "›"
+
+[node name="Sep1" type="HSeparator" parent="."]
+layout_mode = 2
+
+[node name="MapPanel" type="PanelContainer" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_styles/panel = SubResource("map_style")
+
+[node name="MapRect" type="ColorRect" parent="MapPanel"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(280, 160)
+layout_mode = 2
+size_flags_horizontal = 3
+material = SubResource("map_material")
+
+[node name="LocationRow" parent="." instance=ExtResource("info_row")]
+unique_name_in_owner = true
+layout_mode = 2
+visible = false
+key = "Location"
+
+[node name="CoordsRow" parent="." instance=ExtResource("info_row")]
+unique_name_in_owner = true
+layout_mode = 2
+visible = false
+key = "Coords"
+
+[node name="DaysRow" parent="." instance=ExtResource("info_row")]
+unique_name_in_owner = true
+layout_mode = 2
+key = "Days Left"
+
+[node name="PhasesRow" parent="." instance=ExtResource("info_row")]
+unique_name_in_owner = true
+layout_mode = 2
+key = "Phases"
+
+[node name="Sep2" type="HSeparator" parent="."]
+layout_mode = 2
+
+[node name="RequirementsSection" type="Label" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 15
+text = "Requirements"
+
+[node name="RequirementsList" type="VBoxContainer" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="Sep3" type="HSeparator" parent="."]
+layout_mode = 2
+
+[node name="StakesSection" type="Label" parent="."]
+layout_mode = 2
+theme_override_font_sizes/font_size = 15
+text = "Stakes"
+
+[node name="OnFailRow" parent="." instance=ExtResource("info_row")]
+unique_name_in_owner = true
+layout_mode = 2
+key = "On Fail"
+
+[node name="OnPartialRow" parent="." instance=ExtResource("info_row")]
+unique_name_in_owner = true
+layout_mode = 2
+key = "On Partial"
+
+[node name="OnSuccessRow" parent="." instance=ExtResource("info_row")]
+unique_name_in_owner = true
+layout_mode = 2
+key = "On Success"
+
+[node name="RewardsSection" type="Label" parent="."]
+layout_mode = 2
+theme_override_font_sizes/font_size = 15
+text = "Rewards"
+
+[node name="FundingRow" parent="." instance=ExtResource("info_row")]
+unique_name_in_owner = true
+layout_mode = 2
+key = "Funding"
+
+[node name="IntelRow" parent="." instance=ExtResource("info_row")]
+unique_name_in_owner = true
+layout_mode = 2
+key = "Intel"
+
+[node name="ItemRow" parent="." instance=ExtResource("info_row")]
+unique_name_in_owner = true
+layout_mode = 2
+visible = false
+key = "Item"

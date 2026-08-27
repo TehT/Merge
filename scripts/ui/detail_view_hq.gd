@@ -10,114 +10,75 @@ extends "res://scripts/ui/detail_view_base.gd"
 ## _complete_travel), but one that's arrived at a mission or a different
 ## base doesn't. The right sidebar's Squads tab (agent_tab.gd) stays a
 ## flat, base-blind roster of every squad in the org.
+##
+## Layout lives in scenes/ui/views/detail_hq.tscn (editable in the
+## editor); this script only fills the mount-point lists (%VehicleList,
+## %SquadList, %EquipmentList) with row instances at populate() time.
+## Row templates are their own scenes — see scenes/ui/rows/vehicle_row
+## and equipment_row — so the row appearance is editor-editable too.
+
+## Row scenes exported so they show up on the .tscn root node in the
+## editor and stay editable per-project without editing this script.
+@export var vehicle_row_scene: PackedScene
+@export var equipment_row_scene: PackedScene
+
 
 func populate(data: Variant, _dismiss: Callable) -> void:
 	var base: BaseData = data
 	var hq := base if base != null else Game.base_manager.get_primary_base()
-	_add_title(hq.base_name)
-	_add_subtitle("Home base", Color(0.55, 0.55, 0.6, 1.0))
 
-	add_child(HSeparator.new())
+	%Title.text = hq.base_name
+	_fill_vehicles(hq.vehicles)
+	_fill_squads(hq.location)
+	_fill_equipment(hq.local_equipment, hq.id)
 
-	_add_section("Vehicles")
-	var vehicles: Array[VehicleData] = hq.vehicles
+
+func _fill_vehicles(vehicles: Array[VehicleData]) -> void:
+	_clear_children(%VehicleList)
 	if vehicles.is_empty():
-		_add_placeholder_row("No vehicles in the fleet.")
-	else:
-		for vehicle: VehicleData in vehicles:
-			add_child(_make_vehicle_row(vehicle))
+		_add_placeholder_row("No vehicles in the fleet.", %VehicleList)
+		return
+	for vehicle in vehicles:
+		var row := vehicle_row_scene.instantiate()
+		%VehicleList.add_child(row)
+		row.populate(vehicle)
+		row.clicked.connect(func(v: VehicleData) -> void:
+				Game.left_popout.toggle_showing("vehicle", v))
 
-	add_child(HSeparator.new())
-	_add_section("Squads")
+
+func _fill_squads(location: Vector2) -> void:
+	_clear_children(%SquadList)
 	var teams: Array[TeamData] = Game.team_manager.teams.filter(
-		func(t: TeamData) -> bool: return t.location == hq.location)
+			func(t: TeamData) -> bool: return t.location == location)
 	if teams.is_empty():
-		var none_lbl := Label.new()
-		none_lbl.text = "No squads at this base."
-		none_lbl.add_theme_font_size_override("font_size", 12)
-		none_lbl.add_theme_color_override("font_color", Color(0.45, 0.45, 0.5, 1.0))
-		add_child(none_lbl)
-	else:
-		for team: TeamData in teams:
-			if team.is_traveling:
-				var hours_left := maxf(0.0, (team.travel_arrival_day - Game.game_clock.get_current_time_days()) * 24.0)
-				_add_info_row(team.team_name, "En route to %s (%s)" % [
-					team.travel_destination_name, VehicleData.format_duration(hours_left)])
-			elif team.is_on_mission:
-				var hours_left := maxf(0.0, (team.mission_ready_day - Game.game_clock.get_current_time_days()) * 24.0)
-				_add_info_row(team.team_name, "On mission at %s (%s left)" % [
-					team.location_name, VehicleData.format_duration(hours_left)])
-			else:
-				_add_info_row(team.team_name, "At base")
-
-	add_child(HSeparator.new())
-	_add_section("Equipment (local to this base)")
-	var local_equipment: Array[EquipmentData] = hq.local_equipment
-	if local_equipment.is_empty():
-		_add_placeholder_row("No base-local equipment.")
-	else:
-		for item: EquipmentData in local_equipment:
-			add_child(_make_equipment_row(item, hq.id))
-
-	add_child(HSeparator.new())
-	_add_section("Base Upgrades")
-	_add_placeholder_row("Coming soon")
+		_add_placeholder_row("No squads at this base.", %SquadList)
+		return
+	for team in teams:
+		if team.is_traveling:
+			var hours_left := maxf(0.0, (team.travel_arrival_day - Game.game_clock.get_current_time_days()) * 24.0)
+			_add_info_row(team.team_name, "En route to %s (%s)" % [
+					team.travel_destination_name, VehicleData.format_duration(hours_left)], %SquadList)
+		elif team.is_on_mission:
+			var hours_left := maxf(0.0, (team.mission_ready_day - Game.game_clock.get_current_time_days()) * 24.0)
+			_add_info_row(team.team_name, "On mission at %s (%s left)" % [
+					team.location_name, VehicleData.format_duration(hours_left)], %SquadList)
+		else:
+			_add_info_row(team.team_name, "At base", %SquadList)
 
 
-func _make_vehicle_row(vehicle: VehicleData) -> Control:
-	var row := HBoxContainer.new()
-	row.mouse_filter = Control.MOUSE_FILTER_STOP
-	row.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	row.add_theme_constant_override("separation", 6)
-
-	var info := VBoxContainer.new()
-	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.add_child(info)
-
-	var name_lbl := Label.new()
-	name_lbl.text = vehicle.vehicle_name
-	name_lbl.add_theme_font_size_override("font_size", 13)
-	info.add_child(name_lbl)
-
-	var stats_lbl := Label.new()
-	stats_lbl.text = "%d km/h  •  %d km range  •  %d cap" % [
-		int(round(vehicle.speed_kmh)), int(vehicle.max_range_km), vehicle.capacity]
-	stats_lbl.add_theme_font_size_override("font_size", 11)
-	stats_lbl.add_theme_color_override("font_color", Color(0.55, 0.55, 0.6, 1.0))
-	info.add_child(stats_lbl)
-
-	var arrow := Label.new()
-	arrow.text = "›"
-	arrow.add_theme_font_size_override("font_size", 16)
-	arrow.add_theme_color_override("font_color", Color(0.4, 0.42, 0.48, 1.0))
-	arrow.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	row.add_child(arrow)
-
-	row.gui_input.connect(func(input_event: InputEvent) -> void:
-		if input_event is InputEventMouseButton and input_event.pressed and input_event.button_index == MOUSE_BUTTON_LEFT:
-			Game.left_popout.toggle_showing("vehicle", vehicle))
-
-	return row
+func _fill_equipment(items: Array[EquipmentData], base_id: String) -> void:
+	_clear_children(%EquipmentList)
+	if items.is_empty():
+		_add_placeholder_row("No base-local equipment.", %EquipmentList)
+		return
+	for item in items:
+		var row := equipment_row_scene.instantiate()
+		%EquipmentList.add_child(row)
+		row.populate(item, base_id)
+		row.clicked.connect(func(it: EquipmentData, bid: String) -> void:
+				Game.left_popout.toggle_showing("equipment_info", {"item": it, "base_id": bid}))
 
 
-func _make_equipment_row(item: EquipmentData, base_id: String) -> Control:
-	var row := HBoxContainer.new()
-	row.mouse_filter = Control.MOUSE_FILTER_STOP
-	row.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	row.add_theme_constant_override("separation", 6)
-
-	var name_lbl := Label.new()
-	name_lbl.text = item.equipment_name
-	name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.add_child(name_lbl)
-
-	var slot_lbl := Label.new()
-	slot_lbl.text = item.slot_type
-	slot_lbl.add_theme_color_override("font_color", Color(0.55, 0.55, 0.6, 1.0))
-	row.add_child(slot_lbl)
-
-	row.gui_input.connect(func(input_event: InputEvent) -> void:
-		if input_event is InputEventMouseButton and input_event.pressed and input_event.button_index == MOUSE_BUTTON_LEFT:
-			Game.left_popout.toggle_showing("equipment_info", {"item": item, "base_id": base_id}))
-
-	return row
+static func _clear_children(parent: Node) -> void:
+	for child in parent.get_children():
+		child.queue_free()

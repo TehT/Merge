@@ -1,96 +1,84 @@
 extends "res://scripts/ui/detail_view_base.gd"
 ## DetailViewTeam — squad sheet: editable name, cohesion, location/travel
 ## ETA, team proficiency ranks, member roster.
+##
+## Layout lives in scenes/ui/views/detail_team.tscn (editable in the
+## editor). The location row switches shape depending on travel state:
+## clickable (opens transport picker) when stationary, plain info row
+## when traveling or on mission; the .tscn keeps one %LocationRow that
+## script re-wires per state, rather than three separate rows.
 
 func populate(data: Variant, _dismiss: Callable) -> void:
 	var team: TeamData = data
-	var title := LineEdit.new()
-	title.text = team.team_name
-	title.add_theme_font_size_override("font_size", 18)
-	title.expand_to_text_length = true
-	title.flat = true
-	title.placeholder_text = "Squad name"
-	title.text_submitted.connect(func(new_text: String) -> void:
-		_rename_team(team, new_text)
-		title.release_focus())
-	title.focus_exited.connect(func() -> void:
-		_rename_team(team, title.text))
-	add_child(title)
 
-	_add_info_row("Members", "%d" % team.member_ids.size())
-	_add_info_row("Cohesion", "%.0f%%" % team.cohesion)
+	%Title.text = team.team_name
+	%Title.text_submitted.connect(func(new_text: String) -> void:
+			_rename_team(team, new_text)
+			%Title.release_focus())
+	%Title.focus_exited.connect(func() -> void:
+			_rename_team(team, %Title.text))
 
+	%MembersRow.set_value("%d" % team.member_ids.size())
+	%CohesionRow.set_value("%.0f%%" % team.cohesion)
+
+	_apply_location(team)
+	_apply_training(team)
+	_fill_proficiencies(team)
+	_fill_members(team)
+
+
+## Location row's shape depends on team state. Traveling: plain, "En
+## route to X" with a companion "ETA" row shown. On mission: plain,
+## "On mission at X" with a "Wrapping up in" row. Stationary: clickable,
+## just the current location, opens the base-transport picker on click.
+func _apply_location(team: TeamData) -> void:
 	if team.is_traveling:
+		%LocationRow.clickable = false
+		%LocationRow.set_value("En route to %s" % team.travel_destination_name)
 		var hours_left := maxf(0.0, (team.travel_arrival_day - Game.game_clock.get_current_time_days()) * 24.0)
-		_add_info_row("Location", "En route to %s" % team.travel_destination_name)
-		_add_info_row("ETA", VehicleData.format_duration(hours_left))
+		%ETARow.visible = true
+		%ETARow.key = "ETA"
+		%ETARow.set_value(VehicleData.format_duration(hours_left))
 	elif team.is_on_mission:
+		%LocationRow.clickable = false
+		%LocationRow.set_value("On mission at %s" % team.location_name)
 		var hours_left := maxf(0.0, (team.mission_ready_day - Game.game_clock.get_current_time_days()) * 24.0)
-		_add_info_row("Location", "On mission at %s" % team.location_name)
-		_add_info_row("Wrapping up in", VehicleData.format_duration(hours_left))
+		%ETARow.visible = true
+		%ETARow.key = "Wrapping up in"
+		%ETARow.set_value(VehicleData.format_duration(hours_left))
 	else:
-		_add_clickable_location_row(team)
+		%LocationRow.clickable = true
+		%LocationRow.set_value(team.location_name)
+		%LocationRow.clicked.connect(func() -> void:
+				Game.left_popout.toggle_showing("base_transport", team))
 
-	if team.is_training:
-		var days_left: int = Game.team_manager.get_training_days_left(team.id)
-		if days_left > 0:
-			_add_info_row("Training", "%d days left" % days_left)
 
+func _apply_training(team: TeamData) -> void:
+	if not team.is_training:
+		return
+	var days_left: int = Game.team_manager.get_training_days_left(team.id)
+	if days_left <= 0:
+		return
+	%TrainingRow.visible = true
+	%TrainingRow.set_value("%d days left" % days_left)
+
+
+func _fill_proficiencies(team: TeamData) -> void:
+	for child in %ProficienciesList.get_children():
+		child.queue_free()
 	var members := _get_team_members(team)
-
-	add_child(HSeparator.new())
-	_add_section("Team Proficiencies")
 	var team_ranks := MissionResolver.compute_team_ranks(members)
 	for prof_key: String in SkillData.PROFICIENCY_KEYS:
 		if team_ranks[prof_key] > 0:
-			_add_prof_rank_row(prof_key, team_ranks[prof_key], SkillData.PROFICIENCY_COLORS[prof_key])
-
-	add_child(HSeparator.new())
-	_add_section("Members")
-	for m in members:
-		_add_info_row(m.agent_name, m.get_status_name())
+			_add_prof_rank_row(prof_key, team_ranks[prof_key],
+					SkillData.PROFICIENCY_COLORS[prof_key], %ProficienciesList)
 
 
-## Only shown while the team is stationary (not traveling/on mission —
-## see populate()) since transporting mid-trip doesn't make sense. Opens
-## the base-transport picker (distance/travel time/aircraft dropdown),
-## same drill-down pattern as a clickable proficiency row.
-func _add_clickable_location_row(team: TeamData) -> void:
-	var row := HBoxContainer.new()
-	row.mouse_filter = Control.MOUSE_FILTER_STOP
-	row.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	row.add_theme_constant_override("separation", 6)
-
-	var lbl := Label.new()
-	lbl.text = "Location"
-	lbl.add_theme_font_size_override("font_size", 13)
-	lbl.add_theme_color_override("font_color", Color(0.55, 0.55, 0.6, 1.0))
-	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	row.add_child(lbl)
-
-	var spacer := Control.new()
-	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	row.add_child(spacer)
-
-	var val_lbl := Label.new()
-	val_lbl.text = team.location_name
-	val_lbl.add_theme_font_size_override("font_size", 13)
-	val_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	row.add_child(val_lbl)
-
-	var arrow := Label.new()
-	arrow.text = "›"
-	arrow.add_theme_font_size_override("font_size", 16)
-	arrow.add_theme_color_override("font_color", Color(0.4, 0.42, 0.48, 1.0))
-	arrow.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	row.add_child(arrow)
-
-	row.gui_input.connect(func(ev: InputEvent) -> void:
-		if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
-			Game.left_popout.toggle_showing("base_transport", team))
-
-	add_child(row)
+func _fill_members(team: TeamData) -> void:
+	for child in %MembersList.get_children():
+		child.queue_free()
+	for m in _get_team_members(team):
+		_add_info_row(m.agent_name, m.get_status_name(), %MembersList)
 
 
 func _get_team_members(team: TeamData) -> Array[AgentData]:

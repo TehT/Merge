@@ -27,7 +27,10 @@ func _add_section(text: String) -> void:
 	add_child(lbl)
 
 
-func _add_info_row(label: String, value: String) -> void:
+## parent lets a converted-to-tscn view drop rows into a specific mount
+## point (e.g. %SquadList) instead of the view's own root; null keeps
+## the pre-conversion behavior of adding to self.
+func _add_info_row(label: String, value: String, parent: Node = null) -> void:
 	var row := HBoxContainer.new()
 
 	var lbl := Label.new()
@@ -45,7 +48,7 @@ func _add_info_row(label: String, value: String) -> void:
 	val_lbl.add_theme_font_size_override("font_size", 13)
 	row.add_child(val_lbl)
 
-	add_child(row)
+	(parent if parent != null else self).add_child(row)
 
 
 func _add_close_button(on_close: Callable) -> void:
@@ -57,18 +60,18 @@ func _add_close_button(on_close: Callable) -> void:
 	add_child(close_btn)
 
 
-func _add_placeholder_row(text: String) -> void:
+func _add_placeholder_row(text: String, parent: Node = null) -> void:
 	var lbl := Label.new()
 	lbl.text = text
 	lbl.add_theme_font_size_override("font_size", 12)
 	lbl.add_theme_color_override("font_color", Color(0.45, 0.45, 0.5, 1.0))
-	add_child(lbl)
+	(parent if parent != null else self).add_child(lbl)
 
 
 ## Non-clickable proficiency rank pips — used for event requirements and
 ## team proficiencies. DetailViewAgent has its own clickable variant that
 ## opens the skill drill-down slideout.
-func _add_prof_rank_row(prof_key: String, rank: int, color: Color) -> void:
+func _add_prof_rank_row(prof_key: String, rank: int, color: Color, parent: Node = null) -> void:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 6)
 
@@ -93,7 +96,7 @@ func _add_prof_rank_row(prof_key: String, rank: int, color: Color) -> void:
 		pips.add_child(pip)
 	row.add_child(pips)
 
-	add_child(row)
+	(parent if parent != null else self).add_child(row)
 
 
 func _status_color(status: AgentData.Status) -> Color:

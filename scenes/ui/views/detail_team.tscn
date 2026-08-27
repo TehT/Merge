@@ -1,0 +1,66 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" uid="uid://d0c8xx6avtbgi" path="res://scripts/ui/detail_view_team.gd" id="script"]
+[ext_resource type="PackedScene" path="res://scenes/ui/rows/info_row.tscn" id="info_row"]
+
+[node name="DetailTeam" type="VBoxContainer"]
+script = ExtResource("script")
+
+[node name="Title" type="LineEdit" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+flat = true
+placeholder_text = "Squad name"
+expand_to_text_length = true
+theme_override_font_sizes/font_size = 18
+
+[node name="MembersRow" parent="." instance=ExtResource("info_row")]
+unique_name_in_owner = true
+layout_mode = 2
+key = "Members"
+
+[node name="CohesionRow" parent="." instance=ExtResource("info_row")]
+unique_name_in_owner = true
+layout_mode = 2
+key = "Cohesion"
+
+[node name="LocationRow" parent="." instance=ExtResource("info_row")]
+unique_name_in_owner = true
+layout_mode = 2
+key = "Location"
+
+[node name="ETARow" parent="." instance=ExtResource("info_row")]
+unique_name_in_owner = true
+layout_mode = 2
+visible = false
+key = "ETA"
+
+[node name="TrainingRow" parent="." instance=ExtResource("info_row")]
+unique_name_in_owner = true
+layout_mode = 2
+visible = false
+key = "Training"
+
+[node name="Sep1" type="HSeparator" parent="."]
+layout_mode = 2
+
+[node name="ProficienciesSection" type="Label" parent="."]
+layout_mode = 2
+theme_override_font_sizes/font_size = 15
+text = "Team Proficiencies"
+
+[node name="ProficienciesList" type="VBoxContainer" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="Sep2" type="HSeparator" parent="."]
+layout_mode = 2
+
+[node name="MembersSection" type="Label" parent="."]
+layout_mode = 2
+theme_override_font_sizes/font_size = 15
+text = "Members"
+
+[node name="MembersList" type="VBoxContainer" parent="."]
+unique_name_in_owner = true
+layout_mode = 2

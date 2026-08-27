@@ -1,0 +1,70 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" uid="uid://bpapfyl0r2f3f" path="res://scripts/ui/detail_view_hq.gd" id="script"]
+[ext_resource type="PackedScene" path="res://scenes/ui/rows/vehicle_row.tscn" id="vehicle_row"]
+[ext_resource type="PackedScene" path="res://scenes/ui/rows/equipment_row.tscn" id="equipment_row"]
+
+[node name="DetailHQ" type="VBoxContainer"]
+script = ExtResource("script")
+vehicle_row_scene = ExtResource("vehicle_row")
+equipment_row_scene = ExtResource("equipment_row")
+
+[node name="Title" type="Label" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+
+[node name="Subtitle" type="Label" parent="."]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.55, 0.55, 0.6, 1)
+text = "Home base"
+
+[node name="Sep1" type="HSeparator" parent="."]
+layout_mode = 2
+
+[node name="VehiclesSection" type="Label" parent="."]
+layout_mode = 2
+theme_override_font_sizes/font_size = 15
+text = "Vehicles"
+
+[node name="VehicleList" type="VBoxContainer" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="Sep2" type="HSeparator" parent="."]
+layout_mode = 2
+
+[node name="SquadsSection" type="Label" parent="."]
+layout_mode = 2
+theme_override_font_sizes/font_size = 15
+text = "Squads"
+
+[node name="SquadList" type="VBoxContainer" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="Sep3" type="HSeparator" parent="."]
+layout_mode = 2
+
+[node name="EquipmentSection" type="Label" parent="."]
+layout_mode = 2
+theme_override_font_sizes/font_size = 15
+text = "Equipment (local to this base)"
+
+[node name="EquipmentList" type="VBoxContainer" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="Sep4" type="HSeparator" parent="."]
+layout_mode = 2
+
+[node name="UpgradesSection" type="Label" parent="."]
+layout_mode = 2
+theme_override_font_sizes/font_size = 15
+text = "Base Upgrades"
+
+[node name="UpgradesPlaceholder" type="Label" parent="."]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.45, 0.45, 0.5, 1)
+theme_override_font_sizes/font_size = 12
+text = "Coming soon"

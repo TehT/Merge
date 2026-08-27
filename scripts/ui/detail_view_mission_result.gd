@@ -2,16 +2,21 @@ extends "res://scripts/ui/detail_view_base.gd"
 ## DetailViewMissionResult — the report shown once a mission actually
 ## resolves (which can be days after dispatch, when the team arrives on
 ## site — see EventManager._on_team_arrived). Outcome, suitability roll,
-## resolution log lines, and per-agent status. Split off from the older
-## combined detail_view_result.gd (which also housed the travel-
-## confirmation shell) once each PanelHost view had a single
-## populate() — see detail_view_travel_confirmation.gd for the other
-## half.
+## resolution log lines, and per-agent status.
+##
+## Layout lives in scenes/ui/views/detail_mission_result.tscn (editable
+## in the editor). Static skeleton (title, section headers, close button)
+## sits in the scene; per-log-line labels and per-agent outcome rows are
+## built dynamically into the two mount points (%ResolutionList,
+## %OutcomesList) since their counts vary per-mission.
+
 
 func populate(data: Variant, on_close: Callable) -> void:
 	var team_name: String = data["team_name"]
 	var ev_title: String = data["ev_title"]
 	var result: MissionResolutionResult = data["result"]
+
+	%Subtitle.text = "%s  →  %s" % [team_name, ev_title]
 
 	var outcome_color: Color
 	var outcome_text: String
@@ -25,36 +30,39 @@ func populate(data: Variant, on_close: Callable) -> void:
 		_:
 			outcome_color = Color(0.85, 0.35, 0.3, 1.0)
 			outcome_text = "Failure"
+	%Outcome.text = outcome_text
+	%Outcome.add_theme_color_override("font_color", outcome_color)
 
-	_add_title("Mission Report")
-	_add_subtitle("%s  →  %s" % [team_name, ev_title], Color(0.55, 0.55, 0.6, 1.0))
+	%SuitabilityRow.set_value("%d%%" % int(round(float(result.team_suitability) * 100.0)))
+	%ChanceRow.set_value("%d%%" % int(round(float(result.chance) * 100.0)))
+	%RollRow.set_value("%.2f" % result.roll)
 
-	add_child(HSeparator.new())
+	_fill_resolution_lines(result.log_lines)
+	_fill_agent_outcomes(result.agent_results)
 
-	var outcome_lbl := Label.new()
-	outcome_lbl.text = outcome_text
-	outcome_lbl.add_theme_font_size_override("font_size", 16)
-	outcome_lbl.add_theme_color_override("font_color", outcome_color)
-	add_child(outcome_lbl)
+	%CloseButton.pressed.connect(on_close)
 
-	_add_info_row("Suitability", "%d%%" % int(round(float(result.team_suitability) * 100.0)))
-	_add_info_row("Chance", "%d%%" % int(round(float(result.chance) * 100.0)))
-	_add_info_row("Roll", "%.2f" % result.roll)
 
-	if not result.log_lines.is_empty():
-		add_child(HSeparator.new())
-		_add_section("Resolution Details")
-		for line: String in result.log_lines:
-			var line_lbl := Label.new()
-			line_lbl.text = line
-			line_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-			line_lbl.add_theme_font_size_override("font_size", 11)
-			line_lbl.add_theme_color_override("font_color", Color(0.55, 0.55, 0.6, 1.0))
-			add_child(line_lbl)
+func _fill_resolution_lines(log_lines: PackedStringArray) -> void:
+	var has_lines := not log_lines.is_empty()
+	%ResolutionSep.visible = has_lines
+	%ResolutionSection.visible = has_lines
+	for child in %ResolutionList.get_children():
+		child.queue_free()
+	if not has_lines:
+		return
+	for line in log_lines:
+		var line_lbl := Label.new()
+		line_lbl.text = line
+		line_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		line_lbl.add_theme_font_size_override("font_size", 11)
+		line_lbl.add_theme_color_override("font_color", Color(0.55, 0.55, 0.6, 1.0))
+		%ResolutionList.add_child(line_lbl)
 
-	add_child(HSeparator.new())
-	_add_section("Agent Outcomes")
-	var agent_results: Dictionary = result.agent_results
+
+func _fill_agent_outcomes(agent_results: Dictionary) -> void:
+	for child in %OutcomesList.get_children():
+		child.queue_free()
 	for agent_id: String in agent_results:
 		var a: AgentData = Game.agent_manager.get_agent_by_id(agent_id)
 		var status: AgentData.Status = agent_results[agent_id]
@@ -68,7 +76,4 @@ func populate(data: Variant, on_close: Callable) -> void:
 		status_lbl.text = _status_name_for(status)
 		status_lbl.add_theme_color_override("font_color", _status_color(status))
 		row.add_child(status_lbl)
-		add_child(row)
-
-	add_child(HSeparator.new())
-	_add_close_button(on_close)
+		%OutcomesList.add_child(row)

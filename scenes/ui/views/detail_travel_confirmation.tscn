@@ -1,0 +1,67 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" uid="uid://dcr8vor87w3qy" path="res://scripts/ui/detail_view_travel_confirmation.gd" id="script"]
+[ext_resource type="PackedScene" path="res://scenes/ui/rows/info_row.tscn" id="info_row"]
+
+[node name="DetailTravelConfirmation" type="VBoxContainer"]
+script = ExtResource("script")
+
+[node name="Title" type="Label" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+
+[node name="Subtitle" type="Label" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.55, 0.55, 0.6, 1)
+
+[node name="Sep1" type="HSeparator" parent="."]
+layout_mode = 2
+
+[node name="Status" type="Label" parent="."]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.5, 0.6, 0.8, 1)
+theme_override_font_sizes/font_size = 16
+text = "En route"
+
+[node name="RouteSep" type="HSeparator" parent="."]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+
+[node name="RouteSection" type="Label" parent="."]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_font_sizes/font_size = 15
+text = "Route"
+
+[node name="RouteList" type="VBoxContainer" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="DistanceRow" parent="." instance=ExtResource("info_row")]
+unique_name_in_owner = true
+layout_mode = 2
+key = "Distance"
+
+[node name="TravelTimeRow" parent="." instance=ExtResource("info_row")]
+unique_name_in_owner = true
+layout_mode = 2
+key = "Travel Time"
+
+[node name="ArrivingRow" parent="." instance=ExtResource("info_row")]
+unique_name_in_owner = true
+layout_mode = 2
+key = "Arriving"
+
+[node name="Sep2" type="HSeparator" parent="."]
+layout_mode = 2
+
+[node name="CloseButton" type="Button" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+focus_mode = 0
+mouse_default_cursor_shape = 2
+text = "Close"

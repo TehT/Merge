@@ -1,0 +1,127 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" uid="uid://dqbv4j7th4g4i" path="res://scripts/ui/detail_view_agent.gd" id="script"]
+[ext_resource type="PackedScene" path="res://scenes/ui/rows/info_row.tscn" id="info_row"]
+
+[node name="DetailAgent" type="VBoxContainer"]
+script = ExtResource("script")
+
+[node name="Title" type="Label" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+
+[node name="Subtitle" type="Label" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="Sep1" type="HSeparator" parent="."]
+layout_mode = 2
+
+[node name="ProficienciesSection" type="Label" parent="."]
+layout_mode = 2
+theme_override_font_sizes/font_size = 15
+text = "Proficiencies"
+
+[node name="ProficienciesList" type="VBoxContainer" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="Sep2" type="HSeparator" parent="."]
+layout_mode = 2
+
+[node name="EquipmentSection" type="Label" parent="."]
+layout_mode = 2
+theme_override_font_sizes/font_size = 15
+text = "Equipment"
+
+[node name="WeaponRow" parent="." instance=ExtResource("info_row")]
+unique_name_in_owner = true
+layout_mode = 2
+key = "Weapon"
+clickable = true
+
+[node name="ArmorRow" parent="." instance=ExtResource("info_row")]
+unique_name_in_owner = true
+layout_mode = 2
+key = "Armor"
+clickable = true
+
+[node name="GadgetRow" parent="." instance=ExtResource("info_row")]
+unique_name_in_owner = true
+layout_mode = 2
+key = "Gadget"
+clickable = true
+
+[node name="Sep3" type="HSeparator" parent="."]
+layout_mode = 2
+
+[node name="ConditionSection" type="Label" parent="."]
+layout_mode = 2
+theme_override_font_sizes/font_size = 15
+text = "Condition"
+
+[node name="HealthRow" parent="." instance=ExtResource("info_row")]
+unique_name_in_owner = true
+layout_mode = 2
+key = "Health"
+
+[node name="MoraleRow" parent="." instance=ExtResource("info_row")]
+unique_name_in_owner = true
+layout_mode = 2
+key = "Morale"
+
+[node name="Sep4" type="HSeparator" parent="."]
+layout_mode = 2
+
+[node name="PersonalitySection" type="Label" parent="."]
+layout_mode = 2
+theme_override_font_sizes/font_size = 15
+text = "Personality"
+
+[node name="ArchetypeRow" parent="." instance=ExtResource("info_row")]
+unique_name_in_owner = true
+layout_mode = 2
+key = "Archetype"
+clickable = true
+
+[node name="TeamSep" type="HSeparator" parent="."]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+
+[node name="TeamRow" parent="." instance=ExtResource("info_row")]
+unique_name_in_owner = true
+layout_mode = 2
+visible = false
+key = "Team"
+
+[node name="CohesionRow" parent="." instance=ExtResource("info_row")]
+unique_name_in_owner = true
+layout_mode = 2
+visible = false
+key = "Cohesion"
+
+[node name="SupernaturalSep" type="HSeparator" parent="."]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+
+[node name="SupernaturalSection" type="Label" parent="."]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_font_sizes/font_size = 15
+text = "Supernatural"
+
+[node name="SupernaturalTypeRow" parent="." instance=ExtResource("info_row")]
+unique_name_in_owner = true
+layout_mode = 2
+visible = false
+key = "Type"
+
+[node name="SupernaturalPowerRow" parent="." instance=ExtResource("info_row")]
+unique_name_in_owner = true
+layout_mode = 2
+visible = false
+key = "Power"

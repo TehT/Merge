@@ -3,128 +3,101 @@ extends "res://scripts/ui/detail_view_base.gd"
 ## the skill drill-down slideout), equipment, condition, personality
 ## (just the Archetype readout — clickable, opens the five-axis
 ## breakdown in SlideoutViewPersonality), team, supernatural info.
+##
+## Layout lives in scenes/ui/views/detail_agent.tscn (editable in the
+## editor). The three equipment slot rows are always the same three
+## (Weapon/Armor/Gadget); the three optional sections (Team/Cohesion,
+## Supernatural) live in the .tscn hidden-by-default and switch on when
+## the agent actually has that data. Proficiency rows are dynamic in
+## count (one per proficiency with rank>0 or score>0), so they're
+## built in code into the %ProficienciesList mount.
+
+const SLOT_TYPES: Array[String] = ["Weapon", "Armor", "Gadget"]
+
 
 func populate(data: Variant, _dismiss: Callable) -> void:
 	var agent: AgentData = data
-	_add_title(agent.agent_name)
-	_add_subtitle("%s  —  %s" % [agent.get_status_name(), agent.get_type_name()], _status_color(agent.status))
 
-	add_child(HSeparator.new())
+	%Title.text = agent.agent_name
+	%Subtitle.text = "%s  —  %s" % [agent.get_status_name(), agent.get_type_name()]
+	%Subtitle.add_theme_color_override("font_color", _status_color(agent.status))
 
-	_add_section("Proficiencies")
+	_fill_proficiencies(agent)
+	_apply_equipment(agent)
+
+	%HealthRow.set_value("%d / %d" % [int(agent.health), int(agent.max_health)])
+	%MoraleRow.set_value("%d" % int(agent.morale))
+
+	%ArchetypeRow.set_value(agent.get_archetype())
+	%ArchetypeRow.clicked.connect(func() -> void:
+			Game.left_popout.toggle_showing("personality", agent))
+
+	_apply_team(agent)
+	_apply_supernatural(agent)
+
+
+func _fill_proficiencies(agent: AgentData) -> void:
+	for child in %ProficienciesList.get_children():
+		child.queue_free()
 	var ranks := agent.get_proficiency_ranks()
 	var scores := agent.get_proficiency_scores()
 	for key: String in SkillData.PROFICIENCY_KEYS:
 		if ranks[key] > 0 or scores[key] > 0.0:
-			_add_clickable_prof_rank(key, ranks[key], scores[key], SkillData.PROFICIENCY_COLORS[key], agent)
+			_add_clickable_prof_rank(key, ranks[key], scores[key],
+					SkillData.PROFICIENCY_COLORS[key], agent)
 
-	add_child(HSeparator.new())
 
-	_add_section("Equipment")
-	_add_clickable_slot("Weapon", agent.equipped_weapon, agent)
-	_add_clickable_slot("Armor", agent.equipped_armor, agent)
-	_add_clickable_slot("Gadget", agent.equipped_gadget, agent)
+func _apply_equipment(agent: AgentData) -> void:
+	var slot_rows := {
+		"Weapon": %WeaponRow,
+		"Armor": %ArmorRow,
+		"Gadget": %GadgetRow,
+	}
+	var equipped_by_slot := {
+		"Weapon": agent.equipped_weapon,
+		"Armor": agent.equipped_armor,
+		"Gadget": agent.equipped_gadget,
+	}
+	for slot_type in SLOT_TYPES:
+		var row = slot_rows[slot_type]
+		var item = equipped_by_slot[slot_type]
+		row.set_value(item.equipment_name if item != null else "Empty")
+		row.set_value_dim(item == null)
+		row.clicked.connect(func() -> void:
+				Game.left_popout.toggle_showing("equip_slot",
+						{"agent": agent, "slot_type": slot_type}))
 
-	add_child(HSeparator.new())
 
-	_add_section("Condition")
-	_add_info_row("Health", "%d / %d" % [int(agent.health), int(agent.max_health)])
-	_add_info_row("Morale", "%d" % int(agent.morale))
-
-	add_child(HSeparator.new())
-
-	_add_section("Personality")
-	_add_clickable_archetype_row(agent)
-
+func _apply_team(agent: AgentData) -> void:
 	var team: TeamData = Game.team_manager.get_team_of_agent(agent.id)
-	if team:
-		add_child(HSeparator.new())
-		_add_info_row("Team", team.team_name)
-		_add_info_row("Cohesion", "%.0f%%" % team.cohesion)
-
-	if agent.supernatural_type != AgentData.SupernaturalType.NONE:
-		add_child(HSeparator.new())
-		_add_section("Supernatural")
-		_add_info_row("Type", agent.get_type_name())
-		_add_info_row("Power", "%.0f" % agent.supernatural_power)
+	if team == null:
+		return
+	%TeamSep.visible = true
+	%TeamRow.visible = true
+	%TeamRow.set_value(team.team_name)
+	%CohesionRow.visible = true
+	%CohesionRow.set_value("%.0f%%" % team.cohesion)
 
 
-## Just the Archetype name — the five underlying axis bars live in
-## SlideoutViewPersonality (Game.left_popout.show("personality", ...)), same
-## drill-down pattern as a clickable proficiency row.
-func _add_clickable_archetype_row(agent: AgentData) -> void:
-	var row := HBoxContainer.new()
-	row.mouse_filter = Control.MOUSE_FILTER_STOP
-	row.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	row.add_theme_constant_override("separation", 6)
-
-	var lbl := Label.new()
-	lbl.text = "Archetype"
-	lbl.custom_minimum_size.x = 80
-	lbl.add_theme_font_size_override("font_size", 13)
-	lbl.add_theme_color_override("font_color", Color(0.55, 0.55, 0.6, 1.0))
-	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	row.add_child(lbl)
-
-	var val_lbl := Label.new()
-	val_lbl.text = agent.get_archetype()
-	val_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	val_lbl.add_theme_font_size_override("font_size", 13)
-	val_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	row.add_child(val_lbl)
-
-	var arrow := Label.new()
-	arrow.text = "›"
-	arrow.add_theme_font_size_override("font_size", 16)
-	arrow.add_theme_color_override("font_color", Color(0.4, 0.42, 0.48, 1.0))
-	arrow.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	row.add_child(arrow)
-
-	row.gui_input.connect(func(ev: InputEvent) -> void:
-		if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
-			Game.left_popout.toggle_showing("personality", agent))
-
-	add_child(row)
+func _apply_supernatural(agent: AgentData) -> void:
+	if agent.supernatural_type == AgentData.SupernaturalType.NONE:
+		return
+	%SupernaturalSep.visible = true
+	%SupernaturalSection.visible = true
+	%SupernaturalTypeRow.visible = true
+	%SupernaturalTypeRow.set_value(agent.get_type_name())
+	%SupernaturalPowerRow.visible = true
+	%SupernaturalPowerRow.set_value("%.0f" % agent.supernatural_power)
 
 
-func _add_clickable_slot(slot_type: String, equipped: EquipmentData, agent: AgentData) -> void:
-	var row := HBoxContainer.new()
-	row.mouse_filter = Control.MOUSE_FILTER_STOP
-	row.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	row.add_theme_constant_override("separation", 6)
-
-	var lbl := Label.new()
-	lbl.text = slot_type
-	lbl.custom_minimum_size.x = 80
-	lbl.add_theme_font_size_override("font_size", 13)
-	lbl.add_theme_color_override("font_color", Color(0.55, 0.55, 0.6, 1.0))
-	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	row.add_child(lbl)
-
-	var val_lbl := Label.new()
-	val_lbl.text = equipped.equipment_name if equipped != null else "Empty"
-	val_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	val_lbl.add_theme_font_size_override("font_size", 13)
-	if equipped == null:
-		val_lbl.add_theme_color_override("font_color", Color(0.45, 0.45, 0.5, 1.0))
-	val_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	row.add_child(val_lbl)
-
-	var arrow := Label.new()
-	arrow.text = "›"
-	arrow.add_theme_font_size_override("font_size", 16)
-	arrow.add_theme_color_override("font_color", Color(0.4, 0.42, 0.48, 1.0))
-	arrow.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	row.add_child(arrow)
-
-	row.gui_input.connect(func(ev: InputEvent) -> void:
-		if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
-			Game.left_popout.toggle_showing("equip_slot", {"agent": agent, "slot_type": slot_type}))
-
-	add_child(row)
-
-
-func _add_clickable_prof_rank(prof_key: String, rank: int, score: float, color: Color, agent: AgentData) -> void:
+## Clickable proficiency rank row — key + pips + raw score + arrow. Kept
+## in code (rather than a row template) because pip generation is
+## variable-count and index-dependent, and the score label wants a
+## right-aligned fixed-width slot that's a bit specific to this row.
+## Same shape as detail_view_base._add_prof_rank_row plus the score
+## slot, the arrow, and click wiring.
+func _add_clickable_prof_rank(prof_key: String, rank: int, score: float,
+		color: Color, agent: AgentData) -> void:
 	var row := HBoxContainer.new()
 	row.mouse_filter = Control.MOUSE_FILTER_STOP
 	row.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
@@ -178,4 +151,4 @@ func _add_clickable_prof_rank(prof_key: String, rank: int, score: float, color: 
 		if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
 			Game.left_popout.toggle_showing("proficiency", {"agent": agent, "prof_key": prof_key}))
 
-	add_child(row)
+	%ProficienciesList.add_child(row)

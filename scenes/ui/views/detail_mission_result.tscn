@@ -1,0 +1,78 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" uid="uid://b0wwq2uh51gtb" path="res://scripts/ui/detail_view_mission_result.gd" id="script"]
+[ext_resource type="PackedScene" path="res://scenes/ui/rows/info_row.tscn" id="info_row"]
+
+[node name="DetailMissionResult" type="VBoxContainer"]
+script = ExtResource("script")
+
+[node name="Title" type="Label" parent="."]
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "Mission Report"
+
+[node name="Subtitle" type="Label" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.55, 0.55, 0.6, 1)
+
+[node name="Sep1" type="HSeparator" parent="."]
+layout_mode = 2
+
+[node name="Outcome" type="Label" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+
+[node name="SuitabilityRow" parent="." instance=ExtResource("info_row")]
+unique_name_in_owner = true
+layout_mode = 2
+key = "Suitability"
+
+[node name="ChanceRow" parent="." instance=ExtResource("info_row")]
+unique_name_in_owner = true
+layout_mode = 2
+key = "Chance"
+
+[node name="RollRow" parent="." instance=ExtResource("info_row")]
+unique_name_in_owner = true
+layout_mode = 2
+key = "Roll"
+
+[node name="ResolutionSep" type="HSeparator" parent="."]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+
+[node name="ResolutionSection" type="Label" parent="."]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_font_sizes/font_size = 15
+text = "Resolution Details"
+
+[node name="ResolutionList" type="VBoxContainer" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="Sep2" type="HSeparator" parent="."]
+layout_mode = 2
+
+[node name="OutcomesSection" type="Label" parent="."]
+layout_mode = 2
+theme_override_font_sizes/font_size = 15
+text = "Agent Outcomes"
+
+[node name="OutcomesList" type="VBoxContainer" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="Sep3" type="HSeparator" parent="."]
+layout_mode = 2
+
+[node name="CloseButton" type="Button" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+focus_mode = 0
+mouse_default_cursor_shape = 2
+text = "Close"
