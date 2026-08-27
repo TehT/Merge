@@ -1,52 +1,58 @@
-extends "res://scripts/ui/slideout_view_base.gd"
+extends VBoxContainer
 ## SlideoutViewEquipment — info card for one equipment item: slot type,
-## description, requirements, effects, and a Transfer action to move it to
-## another location (base or Global) — instant for now, a stand-in for the
-## eventual logistics system (see BaseManager.transfer_equipment()).
-## Opened by clicking a row in the Equipment tab (right sidebar) — mirrors
-## SlideoutViewVehicle's role for the vehicle fleet.
+## description, requirements, effects, and a Transfer action to move it
+## to another location (base or Global) — instant for now, a stand-in
+## for the eventual logistics system (see BaseManager.transfer_equipment
+## ()). Opened by clicking a row in the Equipment tab (right sidebar) —
+## mirrors SlideoutViewVehicle's role for the vehicle fleet.
+##
+## Layout lives in scenes/ui/views/slideout_equipment.tscn (editable in
+## the editor). The description / requirements / effects sections
+## toggle visible per item; transfer destinations are dynamic (one per
+## base plus Global) and land in %TransferList.
 
 var _item: EquipmentData
 var _base_id: String
 
 
 func populate(data: Variant, on_close: Callable) -> void:
-	var item: EquipmentData = data["item"]
-	var base_id: String = data["base_id"]
-	_item = item
-	_base_id = base_id
-	var accent := Color(0.5, 0.6, 0.8, 1.0)
+	_item = data["item"]
+	_base_id = data["base_id"]
 
-	_add_header(item.equipment_name, on_close, accent, 15)
-	_add_stat("Slot", item.slot_type)
+	%Header.set_title(_item.equipment_name)
+	%Header.close_requested.connect(on_close)
 
-	if item.description != "":
-		add_child(HSeparator.new())
-		var desc := Label.new()
-		desc.text = item.description
-		desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		desc.add_theme_font_size_override("font_size", 11)
-		desc.add_theme_color_override("font_color", Color(0.6, 0.6, 0.65, 1.0))
-		add_child(desc)
+	%SlotRow.set_value(_item.slot_type)
 
-	if not item.requirements.is_empty():
-		add_child(HSeparator.new())
-		_add_section("Requirements")
-		for req: EquipmentRequirement in item.requirements:
-			_add_bullet(req.get_description())
+	if _item.description != "":
+		%DescriptionSep.visible = true
+		%Description.visible = true
+		%Description.text = _item.description
 
-	if not item.effects.is_empty():
-		add_child(HSeparator.new())
-		_add_section("Effects")
-		for effect: EquipmentEffect in item.effects:
-			_add_bullet(effect.get_description())
+	if not _item.requirements.is_empty():
+		%RequirementsSep.visible = true
+		%RequirementsSection.visible = true
+		for req: EquipmentRequirement in _item.requirements:
+			%RequirementsList.add_child(_make_bullet(req.get_description()))
 
-	add_child(HSeparator.new())
-	_add_section("Transfer to")
+	if not _item.effects.is_empty():
+		%EffectsSep.visible = true
+		%EffectsSection.visible = true
+		for effect: EquipmentEffect in _item.effects:
+			%EffectsList.add_child(_make_bullet(effect.get_description()))
+
 	for loc: Dictionary in Game.base_manager.get_all_locations():
-		if loc["base_id"] == base_id:
+		if loc["base_id"] == _base_id:
 			continue
-		add_child(_make_destination_row(loc["label"], loc["base_id"], on_close))
+		%TransferList.add_child(_make_destination_row(loc["label"], loc["base_id"], on_close))
+
+
+func _make_bullet(text: String) -> Label:
+	var lbl := Label.new()
+	lbl.text = "• %s" % text
+	lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	lbl.add_theme_font_size_override("font_size", 12)
+	return lbl
 
 
 func _make_destination_row(label: String, dest_base_id: String, on_close: Callable) -> Control:
@@ -62,49 +68,9 @@ func _make_destination_row(label: String, dest_base_id: String, on_close: Callab
 	btn.text = "Send"
 	btn.focus_mode = Control.FOCUS_NONE
 	btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	btn.pressed.connect(_on_transfer_pressed.bind(dest_base_id, on_close))
+	btn.pressed.connect(func() -> void:
+			if Game.base_manager.transfer_equipment(_item, _base_id, dest_base_id):
+				on_close.call())
 	row.add_child(btn)
 
 	return row
-
-
-func _on_transfer_pressed(dest_base_id: String, on_close: Callable) -> void:
-	if Game.base_manager.transfer_equipment(_item, _base_id, dest_base_id):
-		on_close.call()
-
-
-func _add_section(text: String) -> void:
-	var lbl := Label.new()
-	lbl.text = text
-	lbl.add_theme_font_size_override("font_size", 13)
-	lbl.add_theme_color_override("font_color", Color(0.7, 0.7, 0.75, 1.0))
-	add_child(lbl)
-
-
-func _add_bullet(text: String) -> void:
-	var lbl := Label.new()
-	lbl.text = "• %s" % text
-	lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	lbl.add_theme_font_size_override("font_size", 12)
-	add_child(lbl)
-
-
-func _add_stat(label: String, value: String) -> void:
-	var row := HBoxContainer.new()
-
-	var lbl := Label.new()
-	lbl.text = label
-	lbl.add_theme_font_size_override("font_size", 12)
-	lbl.add_theme_color_override("font_color", Color(0.55, 0.55, 0.6, 1.0))
-	row.add_child(lbl)
-
-	var spacer := Control.new()
-	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.add_child(spacer)
-
-	var val_lbl := Label.new()
-	val_lbl.text = value
-	val_lbl.add_theme_font_size_override("font_size", 12)
-	row.add_child(val_lbl)
-
-	add_child(row)

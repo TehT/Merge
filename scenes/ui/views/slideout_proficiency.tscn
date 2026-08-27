@@ -1,0 +1,59 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" uid="uid://ck3dmulx8wqbr" path="res://scripts/ui/slideout_view_proficiency.gd" id="script"]
+[ext_resource type="PackedScene" path="res://scenes/ui/rows/slideout_header.tscn" id="header"]
+[ext_resource type="PackedScene" path="res://scenes/ui/rows/skill_card.tscn" id="skill_card"]
+
+[node name="SlideoutProficiency" type="VBoxContainer"]
+script = ExtResource("script")
+skill_card_scene = ExtResource("skill_card")
+
+[node name="Header" parent="." instance=ExtResource("header")]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="RankRow" type="HBoxContainer" parent="."]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="RankLabel" type="Label" parent="RankRow"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.5, 0.52, 0.58, 1)
+theme_override_font_sizes/font_size = 12
+text = "Rank"
+
+[node name="Pips" type="HBoxContainer" parent="RankRow"]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="Spacer" type="Control" parent="RankRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="Score" type="Label" parent="RankRow"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.6, 0.6, 0.65, 1)
+theme_override_font_sizes/font_size = 13
+
+[node name="Description" type="Label" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.5, 0.52, 0.58, 1)
+theme_override_font_sizes/font_size = 11
+autowrap_mode = 3
+
+[node name="Sep1" type="HSeparator" parent="."]
+layout_mode = 2
+
+[node name="EmptyLabel" type="Label" parent="."]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_colors/font_color = Color(0.45, 0.45, 0.5, 1)
+theme_override_font_sizes/font_size = 12
+text = "No skills in this proficiency."
+
+[node name="SkillList" type="VBoxContainer" parent="."]
+unique_name_in_owner = true
+layout_mode = 2

@@ -1,0 +1,65 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" uid="uid://dabdheq5pu357" path="res://scripts/ui/personality_axis_row.gd" id="script"]
+
+[node name="AxisRow" type="VBoxContainer"]
+theme_override_constants/separation = 2
+script = ExtResource("script")
+
+[node name="Header" type="HBoxContainer" parent="."]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="Name" type="Label" parent="Header"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 13
+
+[node name="Deviation" type="Label" parent="Header"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.6, 0.62, 0.68, 1)
+theme_override_font_sizes/font_size = 12
+
+[node name="BarRow" type="HBoxContainer" parent="."]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="LowPole" type="Label" parent="BarRow"]
+custom_minimum_size = Vector2(88, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.55, 0.55, 0.6, 1)
+theme_override_font_sizes/font_size = 11
+horizontal_alignment = 2
+
+[node name="Bar" type="Control" parent="BarRow"]
+custom_minimum_size = Vector2(140, 14)
+layout_mode = 2
+
+[node name="Track" type="ColorRect" parent="BarRow/Bar"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.15, 0.16, 0.2, 1)
+
+[node name="Fill" type="ColorRect" parent="BarRow/Bar"]
+visible = false
+layout_mode = 0
+offset_top = 1.0
+offset_bottom = 13.0
+color = Color(0.75, 0.68, 0.5, 1)
+
+[node name="CenterTick" type="ColorRect" parent="BarRow/Bar"]
+layout_mode = 0
+offset_left = 69.0
+offset_right = 71.0
+offset_bottom = 14.0
+color = Color(0.4, 0.42, 0.48, 1)
+
+[node name="HighPole" type="Label" parent="BarRow"]
+custom_minimum_size = Vector2(88, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.55, 0.55, 0.6, 1)
+theme_override_font_sizes/font_size = 11

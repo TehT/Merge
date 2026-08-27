@@ -1,0 +1,35 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" uid="uid://isqhh5kx2a2u" path="res://scripts/ui/slideout_view_deploy.gd" id="script"]
+[ext_resource type="PackedScene" path="res://scenes/ui/rows/slideout_header.tscn" id="header"]
+[ext_resource type="PackedScene" path="res://scenes/ui/rows/deploy_row.tscn" id="deploy_row"]
+
+[node name="SlideoutDeploy" type="VBoxContainer"]
+script = ExtResource("script")
+deploy_row_scene = ExtResource("deploy_row")
+
+[node name="Header" parent="." instance=ExtResource("header")]
+unique_name_in_owner = true
+layout_mode = 2
+title = "Deploy Team"
+
+[node name="Subtitle" type="Label" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.5, 0.52, 0.58, 1)
+theme_override_font_sizes/font_size = 12
+
+[node name="Sep1" type="HSeparator" parent="."]
+layout_mode = 2
+
+[node name="EmptyLabel" type="Label" parent="."]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_colors/font_color = Color(0.45, 0.45, 0.5, 1)
+theme_override_font_sizes/font_size = 12
+text = "No squads to deploy."
+
+[node name="TeamList" type="VBoxContainer" parent="."]
+unique_name_in_owner = true
+layout_mode = 2

@@ -1,0 +1,33 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" uid="uid://c2878i360vlei" path="res://scripts/ui/equip_option_row.gd" id="script"]
+
+[node name="EquipOptionRow" type="VBoxContainer"]
+theme_override_constants/separation = 3
+script = ExtResource("script")
+
+[node name="Name" type="Label" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 13
+
+[node name="Status" type="Label" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+
+[node name="ButtonRow" type="HBoxContainer" parent="."]
+layout_mode = 2
+
+[node name="Spacer" type="Control" parent="ButtonRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="EquipBtn" type="Button" parent="ButtonRow"]
+unique_name_in_owner = true
+layout_mode = 2
+focus_mode = 0
+text = "Equip"
+
+[node name="Sep" type="HSeparator" parent="."]
+layout_mode = 2

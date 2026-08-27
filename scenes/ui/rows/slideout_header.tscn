@@ -1,0 +1,18 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" uid="uid://bt6hpa5igcp63" path="res://scripts/ui/slideout_header.gd" id="script"]
+
+[node name="SlideoutHeader" type="HBoxContainer"]
+script = ExtResource("script")
+
+[node name="Title" type="Label" parent="."]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 16
+
+[node name="CloseBtn" type="Button" parent="."]
+layout_mode = 2
+focus_mode = 0
+mouse_default_cursor_shape = 2
+flat = true
+text = "✕"

@@ -1,0 +1,79 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" uid="uid://dcxa71ojovhxg" path="res://scripts/ui/slideout_view_equipment.gd" id="script"]
+[ext_resource type="PackedScene" path="res://scenes/ui/rows/slideout_header.tscn" id="header"]
+[ext_resource type="PackedScene" path="res://scenes/ui/rows/info_row.tscn" id="info_row"]
+
+[node name="SlideoutEquipment" type="VBoxContainer"]
+script = ExtResource("script")
+
+[node name="Header" parent="." instance=ExtResource("header")]
+unique_name_in_owner = true
+layout_mode = 2
+title_size = 15
+title_color = Color(0.5, 0.6, 0.8, 1)
+
+[node name="SlotRow" parent="." instance=ExtResource("info_row")]
+unique_name_in_owner = true
+layout_mode = 2
+key = "Slot"
+
+[node name="DescriptionSep" type="HSeparator" parent="."]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+
+[node name="Description" type="Label" parent="."]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_colors/font_color = Color(0.6, 0.6, 0.65, 1)
+theme_override_font_sizes/font_size = 11
+autowrap_mode = 3
+
+[node name="RequirementsSep" type="HSeparator" parent="."]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+
+[node name="RequirementsSection" type="Label" parent="."]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_colors/font_color = Color(0.7, 0.7, 0.75, 1)
+theme_override_font_sizes/font_size = 13
+text = "Requirements"
+
+[node name="RequirementsList" type="VBoxContainer" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="EffectsSep" type="HSeparator" parent="."]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+
+[node name="EffectsSection" type="Label" parent="."]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_colors/font_color = Color(0.7, 0.7, 0.75, 1)
+theme_override_font_sizes/font_size = 13
+text = "Effects"
+
+[node name="EffectsList" type="VBoxContainer" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="TransferSep" type="HSeparator" parent="."]
+layout_mode = 2
+
+[node name="TransferSection" type="Label" parent="."]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.7, 0.7, 0.75, 1)
+theme_override_font_sizes/font_size = 13
+text = "Transfer to"
+
+[node name="TransferList" type="VBoxContainer" parent="."]
+unique_name_in_owner = true
+layout_mode = 2

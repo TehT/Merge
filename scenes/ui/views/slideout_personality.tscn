@@ -1,0 +1,57 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" uid="uid://b3aj6uo1i7c75" path="res://scripts/ui/slideout_view_personality.gd" id="script"]
+[ext_resource type="PackedScene" path="res://scenes/ui/rows/slideout_header.tscn" id="header"]
+[ext_resource type="PackedScene" path="res://scenes/ui/rows/personality_axis_row.tscn" id="axis_row"]
+
+[node name="SlideoutPersonality" type="VBoxContainer"]
+script = ExtResource("script")
+
+[node name="Header" parent="." instance=ExtResource("header")]
+unique_name_in_owner = true
+layout_mode = 2
+title = "Personality"
+
+[node name="Archetype" type="Label" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.75, 0.68, 0.5, 1)
+theme_override_font_sizes/font_size = 18
+
+[node name="Sep1" type="HSeparator" parent="."]
+layout_mode = 2
+
+[node name="ProtocolAxis" parent="." instance=ExtResource("axis_row")]
+unique_name_in_owner = true
+layout_mode = 2
+axis_name = "Protocol"
+low_pole = "Improviser"
+high_pole = "Orthodox"
+
+[node name="NerveAxis" parent="." instance=ExtResource("axis_row")]
+unique_name_in_owner = true
+layout_mode = 2
+axis_name = "Nerve"
+low_pole = "Cautious"
+high_pole = "Reckless"
+
+[node name="AttachmentAxis" parent="." instance=ExtResource("axis_row")]
+unique_name_in_owner = true
+layout_mode = 2
+axis_name = "Attachment"
+low_pole = "Detached"
+high_pole = "Compassionate"
+
+[node name="EsotericaAxis" parent="." instance=ExtResource("axis_row")]
+unique_name_in_owner = true
+layout_mode = 2
+axis_name = "Esoterica"
+low_pole = "Pragmatic"
+high_pole = "Attuned"
+
+[node name="EgoAxis" parent="." instance=ExtResource("axis_row")]
+unique_name_in_owner = true
+layout_mode = 2
+axis_name = "Ego"
+low_pole = "Collaborator"
+high_pole = "Dominant"
